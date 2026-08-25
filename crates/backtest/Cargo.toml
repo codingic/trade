@@ -1,0 +1,11 @@
+[package]
+name = "backtest"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+trade-common = { path = "../common" }
+strategy = { path = "../strategy" }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

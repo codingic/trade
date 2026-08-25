@@ -1,0 +1,1712 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>币安合约 · 量化可视化</title>
+  <!-- Apache ECharts：K 线 + 指标图表的成熟开源库 -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .header h1 { font-size: 18px; font-weight: 600; color: #e6edf3; }
+    .toolbar { display: flex; gap: 8px; align-items: center; }
+    .toolbar select, .toolbar button {
+      background: #161b22;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .toolbar button:hover { background: #21262d; }
+    .toolbar button.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+    /* 指标显隐控制面板 */
+    .indicator-panel {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+      padding: 8px 12px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+    }
+    .indicator-panel .label { font-size: 12px; color: #8b949e; margin-right: 4px; }
+    .indicator-panel .ind-btn {
+      padding: 3px 10px;
+      font-size: 12px;
+      border-radius: 12px;
+      border: 1px solid #30363d;
+      background: #0d1117;
+      color: #8b949e;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .indicator-panel .ind-btn.on {
+      background: #1f6feb;
+      border-color: #1f6feb;
+      color: #fff;
+    }
+    #chart {
+      width: 100%;
+      height: calc(100vh - 130px);
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      background: #0d1117;
+    }
+    .status { font-size: 12px; color: #8b949e; margin-left: auto; }
+    /* 数据库查看弹窗 */
+    .modal-mask {
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: none;
+      align-items: center; justify-content: center;
+      z-index: 100;
+    }
+    .modal-mask.open { display: flex; }
+    .modal {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      width: min(760px, 92vw);
+      max-height: 80vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 16px; border-bottom: 1px solid #30363d;
+    }
+    .modal-header h2 { font-size: 15px; color: #e6edf3; font-weight: 600; }
+    .modal-close { background: none; border: none; color: #8b949e; font-size: 22px; cursor: pointer; line-height: 1; }
+    .modal-close:hover { color: #e6edf3; }
+    .modal-body { padding: 12px 16px; overflow: auto; }
+    .db-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .db-table th, .db-table td { padding: 7px 12px; text-align: left; border-bottom: 1px solid #21262d; white-space: nowrap; }
+    .db-table th { color: #8b949e; font-weight: 500; position: sticky; top: 0; background: #161b22; }
+    .db-table td { color: #c9d1d9; }
+    .db-empty { color: #8b949e; font-size: 13px; padding: 12px 0; }
+    .strategy-modal {
+      width: 100vw;
+      height: 100vh;
+      max-height: none;
+      max-width: none;
+      border-radius: 0;
+    }
+    .strategy-modal .modal-body {
+      flex: 1;
+      overflow: hidden;
+    }
+    .strategy-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 16px;
+      align-items: stretch;
+      height: 100%;
+      min-height: 0;
+    }
+    .strategy-form {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow: auto;
+      min-height: 0;
+    }
+    .strategy-form h3, .strategy-result h3 { font-size: 14px; color: #e6edf3; }
+    .strategy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .strategy-field { display: flex; flex-direction: column; gap: 6px; }
+    .strategy-field label { font-size: 12px; color: #8b949e; }
+    .strategy-field input, .strategy-field select {
+      background: #161b22;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 13px;
+    }
+    .strategy-actions { display: flex; gap: 8px; }
+    .strategy-actions button {
+      background: #1f6feb;
+      color: #fff;
+      border: 1px solid #1f6feb;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .strategy-actions button.secondary {
+      background: #161b22;
+      color: #c9d1d9;
+      border-color: #30363d;
+    }
+    .strategy-result {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 10px;
+      padding: 14px;
+      min-height: 0;
+      height: 100%;
+      overflow: auto;
+    }
+    .bt-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+    .bt-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+    .bt-card .label { display: block; font-size: 11px; color: #8b949e; margin-bottom: 6px; }
+    .bt-card .value { font-size: 18px; color: #e6edf3; font-weight: 600; }
+    .bt-card .value.negative { color: #ff7b72; }
+    .bt-card .value.positive { color: #3fb950; }
+    .bt-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .bt-pill {
+      font-size: 12px;
+      color: #8b949e;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 999px;
+      padding: 4px 10px;
+    }
+    .bt-table-wrap { margin-top: 14px; overflow: auto; }
+    .bt-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .bt-table th, .bt-table td { padding: 7px 8px; text-align: left; border-bottom: 1px solid #21262d; white-space: nowrap; }
+    .bt-table th { color: #8b949e; font-weight: 500; }
+    .bt-empty { color: #8b949e; font-size: 13px; padding: 14px 0; }
+    .bt-section + .bt-section {
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid #21262d;
+    }
+    .bt-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .bt-section-header button {
+      background: #161b22;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 7px 12px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .bt-section-header button:hover { background: #21262d; }
+    .catalog-table-wrap {
+      margin-top: 12px;
+      overflow: auto;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+    }
+    .catalog-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .catalog-table th, .catalog-table td {
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid #21262d;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+    .catalog-table th {
+      color: #8b949e;
+      font-weight: 500;
+      position: sticky;
+      top: 0;
+      background: #161b22;
+    }
+    .catalog-table tbody tr:hover { background: #161b22; }
+    .catalog-name { color: #e6edf3; font-weight: 600; }
+    .catalog-desc { color: #8b949e; font-size: 11px; margin-top: 4px; white-space: normal; }
+    .catalog-positive { color: #3fb950; }
+    .catalog-negative { color: #ff7b72; }
+    @media (max-width: 980px) {
+      .strategy-layout { grid-template-columns: 1fr; }
+      .bt-summary { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 640px) {
+      .strategy-grid { grid-template-columns: 1fr; }
+      .bt-summary { grid-template-columns: 1fr; }
+    }
+    /* Top10 精选策略卡片 */
+    .top10-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 50%;
+      font-weight: 700; font-size: 13px;
+      background: #21262d; color: #8b949e;
+      flex-shrink: 0;
+    }
+    .top10-badge.gold { background: linear-gradient(135deg, #f0b429, #da8b00); color: #0d1117; }
+    .top10-badge.silver { background: linear-gradient(135deg, #8b949e, #6e7681); color: #0d1117; }
+    .top10-badge.bronze { background: linear-gradient(135deg, #bc6c25, #8a5016); color: #fff; }
+    .top10-card {
+      display: flex; align-items: center; gap: 14px;
+      background: #0d1117; border: 1px solid #21262d; border-radius: 8px;
+      padding: 14px 16px; margin-bottom: 8px;
+      cursor: pointer; transition: all .15s;
+    }
+    .top10-card:hover { border-color: #1f6feb; background: #161b22; transform: translateX(2px); }
+    .top10-info { flex: 1; min-width: 0; }
+    .top10-name { color: #e6edf3; font-size: 14px; font-weight: 600; }
+    .top10-desc { color: #8b949e; font-size: 11px; margin-top: 3px; font-family: monospace; }
+    .top10-stats { display: flex; gap: 12px; align-items: center; flex-shrink: 0; }
+    .top10-stat { text-align: right; }
+    .top10-stat .val { font-size: 16px; font-weight: 700; color: #3fb950; font-family: monospace; }
+    .top10-stat .lbl { font-size: 10px; color: #484f58; margin-top: 1px; }
+    .top10-stat .val.neg { color: #f85149; }
+    .top10-run {
+      background: #238636; color: #fff; border: none; border-radius: 6px;
+      padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .top10-run:hover { background: #2ea043; }
+    .top10-header-info {
+      background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+      padding: 12px 16px; margin-bottom: 14px; font-size: 12px; color: #8b949e;
+      display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+    }
+    .top10-header-info b { color: #58a6ff; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>📈 币安合约 · K 线 & 技术指标</h1>
+    <div class="toolbar">
+      <select id="symbol">
+        <option value="BTCUSDT">BTCUSDT</option>
+        <option value="ETHUSDT">ETHUSDT</option>
+        <option value="SOLUSDT">SOLUSDT</option>
+        <option value="BNBUSDT">BNBUSDT</option>
+        <option value="ICPUSDT">ICPUSDT</option>
+      </select>
+      <select id="interval">
+        <option value="1m">1 分钟</option>
+        <option value="5m">5 分钟</option>
+        <option value="15m">15 分钟</option>
+        <option value="1h">1 小时</option>
+        <option value="3h">3 小时</option>
+        <option value="4h">4 小时</option>
+        <option value="6h">6 小时</option>
+        <option value="8h">8 小时</option>
+        <option value="12h">12 小时</option>
+        <option value="24h">24 小时</option>
+      </select>
+      <select id="limit">
+        <option value="100">100 根</option>
+        <option value="300" selected>300 根</option>
+        <option value="500">500 根</option>
+        <option value="1000">1000 根</option>
+      </select>
+      <button id="refresh" class="active">刷新</button>
+      <button id="catalogView">策略目录</button>
+      <button id="top10View" style="background:#1f6feb22; border-color:#1f6feb; color:#58a6ff;">🏆 Top10</button>
+      <button id="backtestView">策略回测</button>
+      <button id="dbView">数据库</button>
+    </div>
+    <span class="status" id="status">就绪</span>
+  </div>
+
+  <!-- 指标显隐控制面板 -->
+  <div class="indicator-panel" id="indicatorPanel">
+    <span class="label">指标：</span>
+    <!-- 按钮由 JS 动态生成，避免重复维护 -->
+  </div>
+
+  <div id="chart"></div>
+
+  <!-- 数据库查看弹窗 -->
+  <div class="modal-mask" id="dbModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>数据库数据概览</h2>
+        <button class="modal-close" id="dbClose">&times;</button>
+      </div>
+      <div class="modal-body" id="dbBody">加载中...</div>
+    </div>
+  </div>
+
+  <!-- 策略目录弹窗 -->
+  <div class="modal-mask" id="catalogModal">
+    <div class="modal" style="width: min(1100px, 95vw); max-height: 85vh;">
+      <div class="modal-header">
+        <h2>105 个内置策略目录</h2>
+        <button class="modal-close" id="catalogClose">&times;</button>
+      </div>
+      <div class="modal-body" id="catalogBody">加载中...</div>
+    </div>
+  </div>
+
+  <!-- Top10 精选策略弹窗 -->
+  <div class="modal-mask" id="top10Modal">
+    <div class="modal" style="width: min(1100px, 95vw); max-height: 85vh;">
+      <div class="modal-header">
+        <h2>🏆 4小时周期 Top10 精选策略</h2>
+        <button class="modal-close" id="top10Close">&times;</button>
+      </div>
+      <div class="modal-body" id="top10Body"></div>
+    </div>
+  </div>
+
+  <div class="modal-mask" id="backtestModal">
+    <div class="modal strategy-modal">
+      <div class="modal-header">
+        <h2>策略回测</h2>
+        <button class="modal-close" id="backtestClose">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="strategy-layout">
+          <form class="strategy-form" id="backtestForm">
+            <h3>策略参数</h3>
+            <div class="strategy-grid">
+              <div class="strategy-field">
+                <label for="btSymbol">合约</label>
+                <select id="btSymbol">
+                  <option value="BTCUSDT">BTCUSDT</option>
+                  <option value="ETHUSDT">ETHUSDT</option>
+                  <option value="SOLUSDT">SOLUSDT</option>
+                  <option value="BNBUSDT">BNBUSDT</option>
+                  <option value="ICPUSDT">ICPUSDT</option>
+                </select>
+              </div>
+              <div class="strategy-field">
+                <label for="btInterval">周期</label>
+                <select id="btInterval">
+                  <option value="1m">1 分钟</option>
+                  <option value="5m">5 分钟</option>
+                  <option value="15m">15 分钟</option>
+                  <option value="1h">1 小时</option>
+                  <option value="3h">3 小时</option>
+                  <option value="4h">4 小时</option>
+                  <option value="6h">6 小时</option>
+                  <option value="8h">8 小时</option>
+                  <option value="12h">12 小时</option>
+                  <option value="24h">24 小时</option>
+                </select>
+              </div>
+              <div class="strategy-field">
+                <label for="btFastMa">快线 MA</label>
+                <input id="btFastMa" type="number" min="1" value="7">
+              </div>
+              <div class="strategy-field">
+                <label for="btSlowMa">慢线 MA</label>
+                <input id="btSlowMa" type="number" min="2" value="25">
+              </div>
+              <div class="strategy-field">
+                <label for="btLookback">Lookback</label>
+                <input id="btLookback" type="number" min="26" value="50">
+              </div>
+              <div class="strategy-field">
+                <label for="btLimit">样本根数(0=全部)</label>
+                <input id="btLimit" type="number" min="0" value="0">
+              </div>
+              <div class="strategy-field">
+                <label for="btCapital">初始资金(U)</label>
+                <input id="btCapital" type="number" min="1" step="10" value="100">
+              </div>
+              <div class="strategy-field">
+                <label for="btQuantity">单次保证金(U)</label>
+                <input id="btQuantity" type="number" min="1" step="1" value="100">
+              </div>
+              <div class="strategy-field">
+                <label for="btLeverage">倍数</label>
+                <input id="btLeverage" type="number" min="1" step="1" value="1">
+              </div>
+              <div class="strategy-field">
+                <label for="btFee">手续费率</label>
+                <input id="btFee" type="number" min="0" step="0.0001" value="0.0004">
+              </div>
+            </div>
+            <div class="strategy-actions">
+              <button type="button" id="btRun">运行回测</button>
+              <button type="button" class="secondary" id="btSync">同步当前图表</button>
+            </div>
+          </form>
+
+          <div class="strategy-result">
+            <div class="bt-section">
+              <h3>单策略回测</h3>
+              <div id="backtestBody" class="bt-empty">在左侧编辑策略参数，然后运行回测。</div>
+            </div>
+            <div class="bt-section">
+              <div class="bt-section-header">
+                <h3>100 个常见策略</h3>
+                <button type="button" id="btCatalogRun">跑 100 个策略</button>
+              </div>
+              <div id="backtestCatalog" class="bt-empty">打开回测面板后会自动批量回测 100 个常见策略，你也可以手动重新运行。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://127.0.0.1:3000';
+    const chart = echarts.init(document.getElementById('chart'), 'dark');
+
+    // 各指标面板的 grid 配置（上下堆叠，共 6 个区域）
+    // 布局从上到下：K线(含布林带) → 成交量 → RSI → MACD → KDJ → ATR/CCI/OBV
+    const grids = [
+      { left: 60, right: 20, top: 20, height: '38%' },       // 0: K线 + MA + BOLL
+      { left: 60, right: 20, top: '44%', height: '10%' },    // 1: 成交量
+      { left: 60, right: 20, top: '56%', height: '10%' },    // 2: RSI
+      { left: 60, right: 20, top: '68%', height: '10%' },    // 3: MACD
+      { left: 60, right: 20, top: '80%', height: '10%' },    // 4: KDJ
+      { left: 60, right: 20, top: '92%', height: '8%' },     // 5: ATR/CCI/OBV
+    ];
+
+    // 指标显隐状态表：key = series 的 id，value = 是否显示
+    // 这个对象是「唯一的真相源」，按钮点击改这里，再同步到图表
+    const visibility = {};
+    // 指标定义：{ id, label } —— 用于生成控制按钮，且 id 必须与 series 里的 id 一致
+    const indicatorDefs = [
+      { id: 'ma7',        label: 'MA7' },
+      { id: 'ma25',       label: 'MA25' },
+      { id: 'boll',       label: 'BOLL' },
+      { id: 'volume',     label: '成交量' },
+      { id: 'vol_ma5',    label: 'VOL_MA5' },
+      { id: 'vol_ma20',   label: 'VOL_MA20' },
+      { id: 'rsi',        label: 'RSI' },
+      { id: 'macd',       label: 'MACD' },
+      { id: 'kdj',        label: 'KDJ' },
+      { id: 'atr',        label: 'ATR' },
+      { id: 'cci',        label: 'CCI' },
+      { id: 'obv',        label: 'OBV' },
+    ];
+
+    // 生成控制按钮
+    function buildIndicatorButtons() {
+      const panel = document.getElementById('indicatorPanel');
+      indicatorDefs.forEach(def => {
+        const btn = document.createElement('button');
+        btn.className = 'ind-btn on';   // 默认全部显示
+        btn.textContent = def.label;
+        btn.dataset.id = def.id;
+        visibility[def.id] = true;       // 初始化状态：显示
+        btn.addEventListener('click', () => toggleIndicator(def.id, btn));
+        panel.appendChild(btn);
+      });
+    }
+
+    // 切换某个指标组的显隐
+    function toggleIndicator(id, btn) {
+      visibility[id] = !visibility[id];
+      btn.classList.toggle('on', visibility[id]);
+      applyVisibility();
+    }
+
+    // 把 visibility 状态同步到图表的所有 series
+    // 注意：ECharts 的 series 没有顶层 show 属性，直接设 show 会被忽略。
+    // 正确做法是用 legend.selected（按 series 的 name 匹配）来控制系列显隐。
+    function applyVisibility() {
+      const selected = {};
+      seriesDefs.forEach(def => {
+        selected[def.name] = visibility[def.group] !== false;
+      });
+      chart.setOption({ legend: { selected } });
+    }
+
+    // series id → 控制组 的映射（多子项指标的后缀归到主指标组）
+    function groupOf(id) {
+      if (!id) return null;
+      if (id === 'kline') return null;   // K线不可隐藏
+      const multiPart = ['boll', 'macd', 'kdj'];
+      for (const g of multiPart) {
+        if (id.startsWith(g + '_')) return g;
+      }
+      return id;                          // 单子项指标：id 即组名
+    }
+
+    // 所有 series 的 name 及其归属控制组，在 loadData 里维护
+    let seriesDefs = [];
+
+    async function fetchJson(url, options = {}) {
+      const res = await fetch(url, options);
+      const text = await res.text();
+
+      if (!res.ok) {
+        const detail = text.trim() ? `: ${text.trim()}` : '';
+        throw new Error(`HTTP ${res.status}${detail}`);
+      }
+
+      if (!text.trim()) {
+        throw new Error(`HTTP ${res.status} 空响应`);
+      }
+
+      try {
+        return JSON.parse(text);
+      } catch {
+        throw new Error(`HTTP ${res.status} 返回了非 JSON 响应`);
+      }
+    }
+
+    function fmtNumber(value, digits = 2) {
+      if (value == null || Number.isNaN(Number(value))) return '—';
+      return Number(value).toFixed(digits);
+    }
+
+    async function loadData() {
+      const symbol = document.getElementById('symbol').value;
+      const interval = document.getElementById('interval').value;
+      const limit = document.getElementById('limit').value;
+      setStatus('加载中...');
+
+      try {
+        const data = await fetchJson(
+          `${API_BASE}/api/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`
+        );
+
+        // 时间轴：毫秒时间戳 → 可读时间字符串
+        const times = data.times.map(t => {
+          const d = new Date(t);
+          return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        });
+
+        // 工具：把 None → null（ECharts 自动跳过空值）
+        const opt = v => v.map(x => x ?? null);
+
+        const option = {
+          animation: false,
+          axisPointer: { link: [{ xAxisIndex: 'all' }] },
+          tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+          // 图例不显示，但保留 selected 状态用于控制 series 显隐（配合顶部按钮）
+          legend: { show: false },
+          grid: grids,
+          xAxis: grids.map((g, i) => ({
+            type: 'category',
+            data: times,
+            gridIndex: i,
+            boundaryGap: true,
+            axisLine: { lineStyle: { color: '#30363d' } },
+            axisLabel: i === 5 ? { show: true } : { show: false },
+          })),
+          yAxis: [
+            { gridIndex: 0, scale: true, splitLine: { lineStyle: { color: '#1c2128' } } },
+            { gridIndex: 1, scale: true, splitLine: { show: false }, splitNumber: 2 },
+            { gridIndex: 2, min: 0, max: 100, splitLine: { show: false } },
+            { gridIndex: 3, scale: true, splitLine: { show: false } },
+            { gridIndex: 4, scale: true, splitLine: { show: false } },
+            { gridIndex: 5, scale: true, splitLine: { show: false }, splitNumber: 2 },
+          ],
+          series: [
+            // ========== 主图：K线 + 均线 + 布林带 ==========
+            {
+              id: 'kline', name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0,
+              data: data.candles,
+              itemStyle: {
+                color: '#ef232a', color0: '#14b143',
+                borderColor: '#ef232a', borderColor0: '#14b143',
+              },
+            },
+            { id: 'ma7', name: 'MA7', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: opt(data.ma7), showSymbol: false, lineStyle: { width: 1, color: '#f0b90b' } },
+            { id: 'ma25', name: 'MA25', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: opt(data.ma25), showSymbol: false, lineStyle: { width: 1, color: '#1f6feb' } },
+            { id: 'boll_upper', name: 'BOLL上轨', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: opt(data.boll.upper), showSymbol: false, lineStyle: { width: 1, color: '#f78166', type: 'dashed' } },
+            { id: 'boll_middle', name: 'BOLL中轨', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: opt(data.boll.middle), showSymbol: false, lineStyle: { width: 1, color: '#f78166' } },
+            { id: 'boll_lower', name: 'BOLL下轨', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: opt(data.boll.lower), showSymbol: false, lineStyle: { width: 1, color: '#f78166', type: 'dashed' } },
+
+            // ========== 成交量 + 量均线 ==========
+            {
+              id: 'volume', name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1,
+              data: data.volume,
+              itemStyle: { color: p => p.value >= 0 ? '#ef232a' : '#14b143' },
+            },
+            { id: 'vol_ma5', name: 'VOL_MA5', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: opt(data.vol_ma5), showSymbol: false, lineStyle: { width: 1, color: '#f0b90b' } },
+            { id: 'vol_ma20', name: 'VOL_MA20', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: opt(data.vol_ma20), showSymbol: false, lineStyle: { width: 1, color: '#1f6feb' } },
+
+            // ========== RSI ==========
+            { id: 'rsi', name: 'RSI14', type: 'line', xAxisIndex: 2, yAxisIndex: 2, data: opt(data.rsi14), showSymbol: false, lineStyle: { width: 1, color: '#9d7bd8' } },
+
+            // ========== MACD ==========
+            { id: 'macd_dif', name: 'DIF', type: 'line', xAxisIndex: 3, yAxisIndex: 3, data: opt(data.macd.dif), showSymbol: false, lineStyle: { width: 1, color: '#f0b90b' } },
+            { id: 'macd_dea', name: 'DEA', type: 'line', xAxisIndex: 3, yAxisIndex: 3, data: opt(data.macd.dea), showSymbol: false, lineStyle: { width: 1, color: '#1f6feb' } },
+            { id: 'macd_hist', name: 'MACD', type: 'bar', xAxisIndex: 3, yAxisIndex: 3, data: opt(data.macd.hist), itemStyle: { color: p => p.value >= 0 ? '#ef232a' : '#14b143' } },
+
+            // ========== KDJ ==========
+            { id: 'kdj_k', name: 'K', type: 'line', xAxisIndex: 4, yAxisIndex: 4, data: opt(data.kdj.k), showSymbol: false, lineStyle: { width: 1, color: '#f0b90b' } },
+            { id: 'kdj_d', name: 'D', type: 'line', xAxisIndex: 4, yAxisIndex: 4, data: opt(data.kdj.d), showSymbol: false, lineStyle: { width: 1, color: '#1f6feb' } },
+            { id: 'kdj_j', name: 'J', type: 'line', xAxisIndex: 4, yAxisIndex: 4, data: opt(data.kdj.j), showSymbol: false, lineStyle: { width: 1, color: '#9d7bd8' } },
+
+            // ========== ATR / CCI / OBV ==========
+            { id: 'atr', name: 'ATR14', type: 'line', xAxisIndex: 5, yAxisIndex: 5, data: opt(data.atr14), showSymbol: false, lineStyle: { width: 1, color: '#58a6ff' } },
+            { id: 'cci', name: 'CCI20', type: 'line', xAxisIndex: 5, yAxisIndex: 5, data: opt(data.cci20), showSymbol: false, lineStyle: { width: 1, color: '#3fb950' } },
+            { id: 'obv', name: 'OBV', type: 'line', xAxisIndex: 5, yAxisIndex: 5, data: opt(data.obv), showSymbol: false, lineStyle: { width: 1, color: '#d29922' } },
+          ],
+        };
+
+        // 记录所有 series 的 name → 控制组，供显隐切换使用（legend.selected 按 name 匹配）
+        seriesDefs = option.series.map(s => ({ name: s.name, group: groupOf(s.id) })).filter(x => x.group);
+
+        chart.setOption(option, true);
+        // 重绘后重新应用用户的显隐选择（否则隐藏状态会被重置）
+        applyVisibility();
+        setStatus(`已加载 ${symbol} ${interval} · ${data.times.length} 根`);
+      } catch (e) {
+        setStatus('加载失败：' + e.message + '（请确认后端已启动）');
+      }
+    }
+
+    function setStatus(text) { document.getElementById('status').textContent = text; }
+
+    document.getElementById('refresh').addEventListener('click', loadData);
+    document.getElementById('interval').addEventListener('change', loadData);
+    document.getElementById('symbol').addEventListener('change', loadData);
+    document.getElementById('limit').addEventListener('change', loadData);
+
+    // 窗口缩放自适应
+    window.addEventListener('resize', () => chart.resize());
+
+    // 生成指标控制按钮
+    buildIndicatorButtons();
+
+    // 首屏加载
+    loadData();
+    // 每 30 秒自动刷新一次
+    setInterval(loadData, 30000);
+
+    // ===== 数据库查看弹窗 =====
+    const dbModal = document.getElementById('dbModal');
+    const dbBody = document.getElementById('dbBody');
+    const catalogModal = document.getElementById('catalogModal');
+    const catalogBody = document.getElementById('catalogBody');
+    const backtestModal = document.getElementById('backtestModal');
+    const backtestBody = document.getElementById('backtestBody');
+    const backtestCatalog = document.getElementById('backtestCatalog');
+    const backtestForm = document.getElementById('backtestForm');
+    const backtestRunButton = document.getElementById('btRun');
+    const backtestCatalogButton = document.getElementById('btCatalogRun');
+    document.getElementById('dbView').addEventListener('click', openDbModal);
+    document.getElementById('catalogView').addEventListener('click', openCatalogModal);
+    document.getElementById('top10View').addEventListener('click', openTop10Modal);
+    document.getElementById('backtestView').addEventListener('click', openBacktestModal);
+    document.getElementById('dbClose').addEventListener('click', closeDbModal);
+    document.getElementById('catalogClose').addEventListener('click', closeCatalogModal);
+    document.getElementById('top10Close').addEventListener('click', closeTop10Modal);
+    document.getElementById('backtestClose').addEventListener('click', closeBacktestModal);
+    document.getElementById('btSync').addEventListener('click', syncBacktestFormWithChart);
+    backtestRunButton.addEventListener('click', runBacktest);
+    backtestCatalogButton.addEventListener('click', runStrategyCatalog);
+    backtestForm.addEventListener('submit', e => {
+      e.preventDefault();
+      runBacktest();
+    });
+    // 点击遮罩空白处也可关闭
+    dbModal.addEventListener('click', e => { if (e.target === dbModal) closeDbModal(); });
+    catalogModal.addEventListener('click', e => { if (e.target === catalogModal) closeCatalogModal(); });
+    backtestModal.addEventListener('click', e => { if (e.target === backtestModal) closeBacktestModal(); });
+    // 按 Esc 关闭
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        closeDbModal();
+        closeCatalogModal();
+        closeBacktestModal();
+      }
+    });
+
+    function closeDbModal() { dbModal.classList.remove('open'); }
+    function closeCatalogModal() { catalogModal.classList.remove('open'); }
+    function closeBacktestModal() { backtestModal.classList.remove('open'); }
+
+    function syncBacktestFormWithChart() {
+      document.getElementById('btSymbol').value = document.getElementById('symbol').value;
+      document.getElementById('btInterval').value = document.getElementById('interval').value;
+      // 不覆盖limit，默认0=全部数据
+    }
+
+    function openCatalogModal() {
+      catalogModal.classList.add('open');
+      loadStrategies();
+    }
+
+    async function loadStrategies() {
+      catalogBody.innerHTML = '<div class="bt-empty">加载策略目录中...</div>';
+      try {
+        const data = await fetchJson(`${API_BASE}/api/strategies`);
+        renderStrategyCatalog(data);
+      } catch (e) {
+        catalogBody.innerHTML = `<div class="bt-empty">加载失败：${e.message}</div>`;
+      }
+    }
+
+    let catalogStrategies = []; // 缓存策略列表数据
+
+    function renderStrategyCatalog(data) {
+      const total = data.total || 0;
+      catalogStrategies = data.strategies || [];
+      const categories = data.categories || [];
+
+      renderCatalogListView(total, categories, catalogStrategies);
+    }
+
+    function renderCatalogListView(total, categories, strategies) {
+      let html = `<div style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="color:#8b949e; font-size:13px;">共 <b style="color:#e6edf3;">${total}</b> 个内置策略，点击卡片可编辑参数并回测</span>
+      </div>`;
+
+      const grouped = {};
+      for (const s of strategies) {
+        if (!grouped[s.category]) grouped[s.category] = [];
+        grouped[s.category].push(s);
+      }
+
+      for (const cat of categories) {
+        const items = grouped[cat] || [];
+        html += `
+          <div style="margin-bottom:16px;">
+            <h4 style="font-size:14px; color:#58a6ff; margin-bottom:8px; padding-bottom:6px; border-bottom:1px solid #21262d;">
+              ${cat} <span style="color:#8b949e; font-weight:400; font-size:12px;">(${items.length} 个)</span>
+            </h4>
+            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap:8px;">
+        `;
+        for (const s of items) {
+          html += `
+            <div class="strat-card" data-id="${s.id}" style="background:#0d1117; border:1px solid #21262d; border-radius:6px; padding:10px; cursor:pointer; transition:border-color .15s;" onmouseover="this.style.borderColor='#58a6ff'" onmouseout="this.style.borderColor='#21262d'">
+              <div style="display:flex; justify-content:space-between; align-items:start; gap:8px;">
+                <span style="color:#e6edf3; font-size:13px; font-weight:500;">${s.index}. ${s.name}</span>
+                <span style="color:#3fb950; font-size:10px; white-space:nowrap; background:#0d1117; border:1px solid #238636; border-radius:10px; padding:1px 6px;">回测 ›</span>
+              </div>
+              <div style="color:#8b949e; font-size:11px; margin-top:4px;">${s.description}</div>
+              <div style="color:#484f58; font-size:10px; margin-top:4px; font-family:monospace;">LB=${s.lookback} · ${s.id}</div>
+            </div>
+          `;
+        }
+        html += `</div></div>`;
+      }
+
+      catalogBody.innerHTML = html;
+
+      // 绑定卡片点击事件
+      catalogBody.querySelectorAll('.strat-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const id = card.dataset.id;
+          const strat = catalogStrategies.find(s => s.id === id);
+          if (strat) openStrategyEditor(strat);
+        });
+      });
+    }
+
+    function openStrategyEditor(strategy) {
+      const params = strategy.defaultParams || {};
+      const schema = strategy.paramSchema || [];
+
+      let formHtml = '';
+      for (const field of schema) {
+        const key = field.key;
+        const label = field.label;
+        const val = key in params ? params[key] : '';
+        if (field.type === 'bool') {
+          formHtml += `
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+              <input type="checkbox" id="sp_${key}" ${val ? 'checked' : ''} style="width:auto;">
+              <label for="sp_${key}" style="color:#c9d1d9; font-size:13px; cursor:pointer;">${label} (${key})</label>
+            </div>`;
+        } else if (field.type === 'float') {
+          formHtml += `
+            <div style="margin-bottom:10px;">
+              <label for="sp_${key}" style="color:#8b949e; font-size:12px; display:block; margin-bottom:3px;">${label} <span style="color:#484f58;">(${field.min}~${field.max})</span></label>
+              <input id="sp_${key}" type="number" value="${val}" min="${field.min}" max="${field.max}" step="${field.step}" style="width:100%;">
+            </div>`;
+        } else { // int
+          formHtml += `
+            <div style="margin-bottom:10px;">
+              <label for="sp_${key}" style="color:#8b949e; font-size:12px; display:block; margin-bottom:3px;">${label} <span style="color:#484f58;">(${field.min}~${field.max})</span></label>
+              <input id="sp_${key}" type="number" value="${val}" min="${field.min}" max="${field.max}" step="${field.step}" style="width:100%;">
+            </div>`;
+        }
+      }
+
+      // 回测参数（资金/杠杆等）
+      const capVal = document.getElementById('btCapital')?.value || 100;
+      const qtyVal = document.getElementById('btQuantity')?.value || 100;
+      const levVal = document.getElementById('btLeverage')?.value || 1;
+      const feeVal = document.getElementById('btFee')?.value || 0.0004;
+      const limVal = document.getElementById('btLimit')?.value || 5000;
+      const symVal = document.getElementById('btSymbol')?.value || 'BTCUSDT';
+      const intVal = document.getElementById('btInterval')?.value || '1m';
+
+      catalogBody.innerHTML = `
+        <div style="display:flex; gap:16px; min-height:400px;">
+          <div style="flex:0 0 340px; background:#0d1117; border:1px solid #21262d; border-radius:8px; padding:14px; overflow-y:auto; max-height:65vh;">
+            <div style="margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+              <button id="spBack" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px;">← 返回</button>
+              <span style="color:#8b949e; font-size:12px;">编辑参数</span>
+            </div>
+            <h3 style="color:#e6edf3; font-size:15px; margin:0 0 4px 0;">${strategy.name}</h3>
+            <div style="color:#8b949e; font-size:12px; margin-bottom:12px;">${strategy.description}</div>
+            <div style="color:#484f58; font-size:10px; font-family:monospace; margin-bottom:12px;">${strategy.id} · ${strategy.category}</div>
+            <hr style="border:none; border-top:1px solid #21262d; margin:10px 0;">
+            <div style="color:#58a6ff; font-size:12px; font-weight:600; margin-bottom:8px;">策略参数</div>
+            ${formHtml}
+            <hr style="border:none; border-top:1px solid #21262d; margin:10px 0;">
+            <div style="color:#58a6ff; font-size:12px; font-weight:600; margin-bottom:8px;">回测设置</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+              <div>
+                <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">合约</label>
+                <input id="sp_symbol" value="${symVal}" style="width:100%;">
+              </div>
+              <div>
+                <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">周期</label>
+                <select id="sp_interval" style="width:100%;">
+                  <option value="1m" ${intVal==='1m'?'selected':''}>1m</option>
+                  <option value="5m" ${intVal==='5m'?'selected':''}>5m</option>
+                  <option value="15m" ${intVal==='15m'?'selected':''}>15m</option>
+                  <option value="1h" ${intVal==='1h'?'selected':''}>1h</option>
+                  <option value="4h" ${intVal==='4h'?'selected':''}>4h</option>
+                </select>
+              </div>
+              <div>
+                <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">资金(U)</label>
+                <input id="sp_capital" type="number" value="${capVal}" min="1" step="10" style="width:100%;">
+              </div>
+              <div>
+                <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">保证金(U)</label>
+                <input id="sp_quantity" type="number" value="${qtyVal}" min="1" step="1" style="width:100%;">
+              </div>
+              <div>
+                <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">杠杆倍数</label>
+                <input id="sp_leverage" type="number" value="${levVal}" min="1" step="1" style="width:100%;">
+              </div>
+              <div>
+                <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">手续费率</label>
+                <input id="sp_fee" type="number" value="${feeVal}" min="0" step="0.0001" style="width:100%;">
+              </div>
+              <div style="grid-column:span 2;">
+                <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">K线数量(0=全部)</label>
+                <input id="sp_limit" type="number" value="${limVal}" min="0" step="500" style="width:100%;">
+              </div>
+            </div>
+            <button id="spRun" style="width:100%; margin-top:14px; background:#238636; color:#fff; border:none; border-radius:6px; padding:9px; font-size:13px; font-weight:600; cursor:pointer;">▶ 运行回测</button>
+          </div>
+          <div id="spResult" style="flex:1; overflow-y:auto; max-height:65vh;">
+            <div class="bt-empty">在左侧调整参数后点击「运行回测」查看结果。</div>
+          </div>
+        </div>`;
+
+      document.getElementById('spBack').addEventListener('click', () => {
+        loadStrategies();
+      });
+      document.getElementById('spRun').addEventListener('click', () => {
+        runCustomBacktest(strategy);
+      });
+    }
+
+    async function runCustomBacktest(strategy) {
+      const schema = strategy.paramSchema || [];
+      const params = {};
+      for (const field of schema) {
+        const key = field.key;
+        const el = document.getElementById('sp_' + key);
+        if (!el) continue;
+        if (field.type === 'bool') {
+          params[key] = el.checked;
+        } else if (field.type === 'float') {
+          params[key] = parseFloat(el.value) || 0;
+        } else {
+          params[key] = parseInt(el.value) || 0;
+        }
+      }
+
+      const payload = {
+        strategy_id: strategy.id,
+        symbol: document.getElementById('sp_symbol').value,
+        interval: document.getElementById('sp_interval').value,
+        capital: parseFloat(document.getElementById('sp_capital').value) || 100,
+        quantity: parseFloat(document.getElementById('sp_quantity').value) || 100,
+        leverage: parseFloat(document.getElementById('sp_leverage').value) || 1,
+        fee: parseFloat(document.getElementById('sp_fee').value) || 0.0004,
+        limit: parseInt(document.getElementById('sp_limit').value) || 0,
+        lookback: strategy.lookback || 50,
+        params: params,
+      };
+
+      const resultEl = document.getElementById('spResult');
+      resultEl.innerHTML = '<div class="bt-empty">回测中...</div>';
+      try {
+        const data = await fetchJson(`${API_BASE}/api/backtest/custom`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        renderCustomBacktestResult(data);
+      } catch (e) {
+        resultEl.innerHTML = `<div class="bt-empty">回测失败：${e.message}</div>`;
+      }
+    }
+
+    function renderCustomBacktestResult(data) {
+      const resultEl = document.getElementById('spResult');
+      const s = data.strategy || {};
+      const params = data.parameters || {};
+      const summary = data.summary || {};
+      const trades = data.recentTrades || [];
+      const usedParams = s.params || {};
+      const profitClass = Number(summary.netProfit) >= 0 ? 'positive' : 'negative';
+
+      // 显示当前使用的参数
+      let paramsHtml = '';
+      for (const [k, v] of Object.entries(usedParams)) {
+        paramsHtml += `<span class="bt-pill">${k}=${typeof v === 'boolean' ? (v ? 'true' : 'false') : v}</span>`;
+      }
+
+      let html = `
+        <div style="margin-bottom:10px;">
+          <h3 style="color:#e6edf3; font-size:16px; margin:0 0 6px 0;">${s.name || ''} 回测结果</h3>
+          <div style="color:#8b949e; font-size:12px; margin-bottom:8px;">${s.description || ''}</div>
+          <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px;">${paramsHtml}</div>
+        </div>
+        <div class="bt-meta">
+          <span class="bt-pill">${params.symbol || '—'} · ${params.interval || '—'}</span>
+          <span class="bt-pill">样本 ${summary.bars ?? 0} 根</span>
+          <span class="bt-pill">Lookback ${params.lookback ?? '—'}</span>
+          <span class="bt-pill">时间 ${fmtTime(summary.firstOpenTime)} → ${fmtTime(summary.lastCloseTime)}</span>
+        </div>
+        <div class="bt-summary">
+          <div class="bt-card"><span class="label">净收益</span><span class="value ${profitClass}">${fmtNumber(summary.netProfit)}U</span></div>
+          <div class="bt-card"><span class="label">收益率</span><span class="value ${profitClass}">${fmtNumber(summary.returnPct)}%</span></div>
+          <div class="bt-card"><span class="label">最终权益</span><span class="value">${fmtNumber(summary.finalEquity)}U</span></div>
+          <div class="bt-card"><span class="label">最大回撤</span><span class="value">${fmtNumber(summary.maxDrawdownPct)}%</span></div>
+          <div class="bt-card"><span class="label">胜率</span><span class="value">${fmtNumber(summary.winRatePct)}%</span></div>
+          <div class="bt-card"><span class="label">交易笔数</span><span class="value">${summary.tradeCount ?? 0}</span></div>
+        </div>
+        <div class="bt-meta">
+          <span class="bt-pill">初始资金 ${fmtNumber(params.capital)}U</span>
+          <span class="bt-pill">保证金 ${fmtNumber(params.marginPerTrade, 2)}U</span>
+          <span class="bt-pill">倍数 ${fmtNumber(params.leverage, 2)}x</span>
+          <span class="bt-pill">名义仓位 ${fmtNumber(params.notionalPerTrade, 2)}U</span>
+          <span class="bt-pill">手续费 ${fmtNumber(summary.totalFees, 4)}U</span>
+          <span class="bt-pill">盈 ${summary.winCount ?? 0} · 亏 ${summary.lossCount ?? 0}</span>
+        </div>`;
+
+      if (!trades.length) {
+        html += '<div class="bt-empty">本次回测没有触发任何成交。可尝试调整参数或使用更多数据。</div>';
+        resultEl.innerHTML = html;
+        return;
+      }
+
+      // 添加K线图容器
+      html += '<div id="btChart" style="width:100%; height:320px; margin:10px 0; background:#0d1117; border:1px solid #30363d; border-radius:6px;"></div>';
+
+      html += '<div class="bt-table-wrap"><table class="bt-table"><thead><tr><th>方向</th><th>入场时间</th><th>入场价</th><th>出场时间</th><th>出场价</th><th>净收益</th><th>手续费</th><th>持有K数</th></tr></thead><tbody>';
+      for (const trade of trades) {
+        const pnlClass = Number(trade.netPnl) >= 0 ? 'positive' : 'negative';
+        html += `<tr>
+          <td style="color:${trade.side==='LONG'?'#3fb950':'#f85149'};">${trade.side}</td>
+          <td>${fmtTime(trade.entryTime)}</td>
+          <td>${fmtNumber(trade.entryPrice, 2)}</td>
+          <td>${fmtTime(trade.exitTime)}</td>
+          <td>${fmtNumber(trade.exitPrice, 2)}</td>
+          <td class="${pnlClass}">${fmtNumber(trade.netPnl, 2)}U</td>
+          <td>${fmtNumber(trade.fee, 4)}</td>
+          <td>${trade.barsHeld}</td>
+        </tr>`;
+      }
+      html += '</tbody></table></div>';
+      resultEl.innerHTML = html;
+
+      // 渲染K线图和买卖点
+      renderBacktestChart(params.symbol, params.interval, trades);
+    }
+
+    async function renderBacktestChart(symbol, interval, trades) {
+      const chartDom = document.getElementById('btChart');
+      if (!chartDom) return;
+
+      try {
+        // 请求足够的K线数据（1500根上限足够覆盖回测区间）
+        const data = await fetchJson(`${API_BASE}/api/klines?symbol=${symbol}&interval=${interval}&limit=1500`);
+
+        const btChart = echarts.init(chartDom, 'dark');
+
+        // 构建买卖点标记数据
+        const buyMarkers = [];
+        const sellMarkers = [];
+
+        for (const trade of trades) {
+          // 找到入场时间对应的K线索引
+          const entryIdx = data.times.findIndex(t => t >= trade.entryTime);
+          if (entryIdx >= 0) {
+            buyMarkers.push({
+              coord: [entryIdx, trade.entryPrice],
+              value: '买',
+              itemStyle: { color: '#3fb950' },
+              symbol: 'triangle',
+              symbolSize: 14,
+              symbolRotate: 0,
+            });
+          }
+          // 找到出场时间对应的K线索引
+          const exitIdx = data.times.findIndex(t => t >= trade.exitTime);
+          if (exitIdx >= 0) {
+            sellMarkers.push({
+              coord: [exitIdx, trade.exitPrice],
+              value: '卖',
+              itemStyle: { color: '#f85149' },
+              symbol: 'triangle',
+              symbolSize: 14,
+              symbolRotate: 180,
+            });
+          }
+        }
+
+        const option = {
+          backgroundColor: '#0d1117',
+          animation: false,
+          grid: { left: 50, right: 20, top: 30, bottom: 30 },
+          xAxis: {
+            type: 'category',
+            data: data.times.map((t, i) => i),
+            axisLine: { lineStyle: { color: '#30363d' } },
+            axisLabel: {
+              color: '#8b949e',
+              fontSize: 10,
+              formatter: function(val) {
+                const idx = parseInt(val);
+                if (idx % Math.floor(data.times.length / 6) === 0) {
+                  return fmtTime(data.times[idx]);
+                }
+                return '';
+              }
+            },
+            splitLine: { show: false },
+          },
+          yAxis: {
+            scale: true,
+            axisLine: { lineStyle: { color: '#30363d' } },
+            axisLabel: { color: '#8b949e', fontSize: 10 },
+            splitLine: { lineStyle: { color: '#21262d' } },
+          },
+          tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'cross' },
+            backgroundColor: '#161b22',
+            borderColor: '#30363d',
+            textStyle: { color: '#c9d1d9', fontSize: 11 },
+            formatter: function(params) {
+              const idx = params[0].dataIndex;
+              const time = fmtTime(data.times[idx]);
+              const k = data.candles[idx];
+              if (!k) return '';
+              return `<div style="font-size:11px;">
+                <div style="margin-bottom:4px;color:#8b949e;">${time}</div>
+                <div>开: <span style="color:#e6edf3;">${k[0].toFixed(2)}</span></div>
+                <div>收: <span style="color:${k[1]>=k[0]?'#3fb950':'#f85149'};">${k[1].toFixed(2)}</span></div>
+                <div>低: <span style="color:#e6edf3;">${k[2].toFixed(2)}</span></div>
+                <div>高: <span style="color:#e6edf3;">${k[3].toFixed(2)}</span></div>
+              </div>`;
+            }
+          },
+          series: [
+            {
+              name: 'K线',
+              type: 'candlestick',
+              data: data.candles,
+              itemStyle: {
+                color: '#ef232a',
+                color0: '#14b143',
+                borderColor: '#ef232a',
+                borderColor0: '#14b143',
+              },
+              markPoint: {
+                symbol: 'triangle',
+                symbolSize: 14,
+                label: {
+                  show: true,
+                  color: '#fff',
+                  fontSize: 9,
+                  fontWeight: 'bold',
+                },
+                data: [...buyMarkers, ...sellMarkers],
+              },
+            },
+          ],
+        };
+
+        btChart.setOption(option);
+
+        // 自适应大小
+        setTimeout(() => btChart.resize(), 100);
+        window.addEventListener('resize', () => btChart.resize());
+
+      } catch (e) {
+        console.error('加载K线图失败:', e);
+      }
+    }
+
+    // ====== Top10 精选策略 (4h BTCUSDT, 100U, 1x, 复利全仓) ======
+    const TOP10_STRATEGIES = [
+      {
+        rank: 1, name: 'RSI14 中线 (35/45)',
+        kind: 'rsiMidline', strategyId: 'rsi14_midline',
+        params: { period: 14, bullLevel: 35, bearLevel: 45 },
+        lookback: 24,
+        scanReturn: 60.11, winRate: 64.7, trades: 17, maxDd: 9.47,
+        desc: 'RSI14 上穿35做多，下穿45做空'
+      },
+      {
+        rank: 2, name: 'RSI14 中线 (35/50)',
+        kind: 'rsiMidline', strategyId: 'rsi14_midline',
+        params: { period: 14, bullLevel: 35, bearLevel: 50 },
+        lookback: 24,
+        scanReturn: 58.83, winRate: 73.3, trades: 15, maxDd: 9.05,
+        desc: 'RSI14 上穿35做多，下穿50做空'
+      },
+      {
+        rank: 3, name: 'RSI10 中线 (35/50)',
+        kind: 'rsiMidline', strategyId: 'rsi10_midline',
+        params: { period: 10, bullLevel: 35, bearLevel: 50 },
+        lookback: 20,
+        scanReturn: 50.18, winRate: 68.4, trades: 19, maxDd: 7.69,
+        desc: 'RSI10 上穿35做多，下穿50做空'
+      },
+      {
+        rank: 4, name: 'RSI10 中线 (35/55)',
+        kind: 'rsiMidline', strategyId: 'rsi10_midline',
+        params: { period: 10, bullLevel: 35, bearLevel: 55 },
+        lookback: 20,
+        scanReturn: 49.73, winRate: 76.5, trades: 17, maxDd: 8.28,
+        desc: 'RSI10 上穿35做多，下穿55做空'
+      },
+      {
+        rank: 5, name: 'RSI10 中线 (35/45)',
+        kind: 'rsiMidline', strategyId: 'rsi10_midline',
+        params: { period: 10, bullLevel: 35, bearLevel: 45 },
+        lookback: 20,
+        scanReturn: 46.44, winRate: 52.2, trades: 23, maxDd: 9.47,
+        desc: 'RSI10 上穿35做多，下穿45做空'
+      },
+      {
+        rank: 6, name: 'RSI14 中线 (40/50)',
+        kind: 'rsiMidline', strategyId: 'rsi14_midline',
+        params: { period: 14, bullLevel: 40, bearLevel: 50 },
+        lookback: 24,
+        scanReturn: 44.34, winRate: 56.5, trades: 23, maxDd: 11.00,
+        desc: 'RSI14 上穿40做多，下穿50做空'
+      },
+      {
+        rank: 7, name: 'RSI10 中线 (40/55)',
+        kind: 'rsiMidline', strategyId: 'rsi10_midline',
+        params: { period: 10, bullLevel: 40, bearLevel: 55 },
+        lookback: 20,
+        scanReturn: 43.60, winRate: 58.6, trades: 29, maxDd: 13.53,
+        desc: 'RSI10 上穿40做多，下穿55做空'
+      },
+      {
+        rank: 8, name: 'RSI14 中线 (45/60)',
+        kind: 'rsiMidline', strategyId: 'rsi14_midline',
+        params: { period: 14, bullLevel: 45, bearLevel: 60 },
+        lookback: 24,
+        scanReturn: 43.03, winRate: 58.8, trades: 17, maxDd: 7.55,
+        desc: 'RSI14 上穿45做多，下穿60做空'
+      },
+      {
+        rank: 9, name: 'SMA 5/15 金叉',
+        kind: 'maCross', strategyId: 'sma_5_20',
+        params: { fast: 5, slow: 15, useEma: false },
+        lookback: 25,
+        scanReturn: 41.97, winRate: 44.4, trades: 36, maxDd: 8.85,
+        desc: 'SMA5 上穿SMA15做多，下穿做空'
+      },
+      {
+        rank: 10, name: 'RSI14 中线 (40/45)',
+        kind: 'rsiMidline', strategyId: 'rsi14_midline',
+        params: { period: 14, bullLevel: 40, bearLevel: 45 },
+        lookback: 24,
+        scanReturn: 39.70, winRate: 51.7, trades: 29, maxDd: 9.47,
+        desc: 'RSI14 上穿40做多，下穿45做空'
+      },
+    ];
+
+    const top10Modal = document.getElementById('top10Modal');
+    const top10Body = document.getElementById('top10Body');
+
+    function openTop10Modal() {
+      renderTop10();
+      top10Modal.classList.add('open');
+    }
+
+    function closeTop10Modal() {
+      top10Modal.classList.remove('open');
+    }
+
+    function renderTop10() {
+      let html = `
+        <div class="top10-header-info">
+          <span>📊 数据周期: <b>BTCUSDT · 4h · 约90天</b></span>
+          <span>💰 资金: <b>100U · 1x杠杆 · 复利全仓</b></span>
+          <span>💸 手续费: <b>0.04%</b></span>
+          <span>🔍 扫描: <b>506个参数组合</b></span>
+        </div>
+      `;
+
+      for (const s of TOP10_STRATEGIES) {
+        let badgeClass = '';
+        if (s.rank === 1) badgeClass = 'gold';
+        else if (s.rank === 2) badgeClass = 'silver';
+        else if (s.rank === 3) badgeClass = 'bronze';
+
+        const paramsStr = Object.entries(s.params).map(([k,v]) => `${k}=${v}`).join(', ');
+
+        html += `
+          <div class="top10-card" data-rank="${s.rank}">
+            <div class="top10-badge ${badgeClass}">${s.rank}</div>
+            <div class="top10-info">
+              <div class="top10-name">${s.name}</div>
+              <div class="top10-desc">${s.desc} · ${paramsStr} · LB=${s.lookback}</div>
+            </div>
+            <div class="top10-stats">
+              <div class="top10-stat">
+                <div class="val">+${s.scanReturn.toFixed(1)}%</div>
+                <div class="lbl">收益率</div>
+              </div>
+              <div class="top10-stat">
+                <div class="val" style="color:#c9d1d9; font-size:13px;">${s.winRate.toFixed(0)}%</div>
+                <div class="lbl">胜率</div>
+              </div>
+              <div class="top10-stat">
+                <div class="val" style="color:#f0b429; font-size:13px;">${s.trades}</div>
+                <div class="lbl">笔数</div>
+              </div>
+              <div class="top10-stat">
+                <div class="val neg" style="font-size:13px;">${s.maxDd.toFixed(1)}%</div>
+                <div class="lbl">回撤</div>
+              </div>
+            </div>
+            <button class="top10-run" data-rank="${s.rank}">▶ 回测</button>
+          </div>
+        `;
+      }
+
+      html += `
+        <div style="margin-top:14px; padding:10px 14px; background:#161b22; border:1px solid #30363d; border-radius:8px; font-size:11px; color:#8b949e;">
+          ⚠️ 以上收益率基于历史数据回测（复利全仓模式），不构成投资建议。点击「回测」按钮可使用该策略参数在当前选择的合约/周期上运行回测。
+        </div>
+      `;
+
+      top10Body.innerHTML = html;
+
+      // Bind card click → open strategy editor with preset params
+      top10Body.querySelectorAll('.top10-card').forEach(card => {
+        card.addEventListener('click', (e) => {
+          if (e.target.classList.contains('top10-run')) return;
+          const rank = parseInt(card.dataset.rank);
+          const s = TOP10_STRATEGIES.find(x => x.rank === rank);
+          if (s) runTop10Backtest(s, false);
+        });
+      });
+      // Bind run button
+      top10Body.querySelectorAll('.top10-run').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const rank = parseInt(btn.dataset.rank);
+          const s = TOP10_STRATEGIES.find(x => x.rank === rank);
+          if (s) runTop10Backtest(s, true);
+        });
+      });
+    }
+
+    function kindToStrategyId(kind) {
+      // Map kind to a real strategy ID from the catalog
+      const map = {
+        'maCross': 'sma_7_25',
+        'rsiMidline': 'rsi14_midline',
+        'rsiReversal': 'rsi7_reversal',
+        'rsiLongOnly': 'rsi14_long_20_90',
+        'macdCross': 'macd_12_26_9',
+        'bollReversion': 'boll20_reversion',
+        'bollBreakout': 'boll20_breakout',
+        'kdjCross': 'kdj9_cross',
+        'cciReversal': 'cci20_reversal',
+        'cciMidline': 'cci20_midline',
+        'priceMaCross': 'price_ma20',
+        'donchianBreakout': 'donchian20',
+      };
+      return map[kind] || 'sma_7_25';
+    }
+
+    function kindToParamSchema(kind) {
+      // Build schema matching the backend's param definitions
+      switch(kind) {
+        case 'maCross':
+          return [
+            { key: 'fast', label: '快线周期', type: 'int', min: 2, max: 200, step: 1 },
+            { key: 'slow', label: '慢线周期', type: 'int', min: 3, max: 500, step: 1 },
+            { key: 'useEma', label: '使用 EMA', type: 'bool' },
+          ];
+        case 'rsiMidline':
+          return [
+            { key: 'period', label: 'RSI 周期', type: 'int', min: 2, max: 100, step: 1 },
+            { key: 'bullLevel', label: '多头阈值', type: 'float', min: 0, max: 60, step: 0.1 },
+            { key: 'bearLevel', label: '空头阈值', type: 'float', min: 40, max: 100, step: 0.1 },
+          ];
+        case 'rsiReversal':
+          return [
+            { key: 'period', label: 'RSI 周期', type: 'int', min: 2, max: 100, step: 1 },
+            { key: 'oversold', label: '超卖阈值', type: 'float', min: 0, max: 50, step: 0.1 },
+            { key: 'overbought', label: '超买阈值', type: 'float', min: 50, max: 100, step: 0.1 },
+          ];
+        case 'rsiLongOnly':
+          return [
+            { key: 'period', label: 'RSI 周期', type: 'int', min: 2, max: 100, step: 1 },
+            { key: 'oversold', label: '开多阈值', type: 'float', min: 0, max: 50, step: 0.1 },
+            { key: 'overbought', label: '平多阈值', type: 'float', min: 50, max: 100, step: 0.1 },
+          ];
+        case 'macdCross':
+          return [
+            { key: 'fast', label: '快线 EMA', type: 'int', min: 2, max: 100, step: 1 },
+            { key: 'slow', label: '慢线 EMA', type: 'int', min: 3, max: 200, step: 1 },
+            { key: 'signal', label: '信号线', type: 'int', min: 2, max: 100, step: 1 },
+          ];
+        case 'bollReversion':
+        case 'bollBreakout':
+          return [
+            { key: 'period', label: '布林周期', type: 'int', min: 5, max: 100, step: 1 },
+            { key: 'k', label: '带宽倍数 k', type: 'float', min: 0.5, max: 5, step: 0.1 },
+          ];
+        case 'kdjCross':
+          return [{ key: 'period', label: 'KDJ 周期', type: 'int', min: 2, max: 100, step: 1 }];
+        case 'cciReversal':
+          return [
+            { key: 'period', label: 'CCI 周期', type: 'int', min: 2, max: 100, step: 1 },
+            { key: 'threshold', label: '极值阈值', type: 'float', min: 50, max: 300, step: 1 },
+          ];
+        case 'cciMidline':
+          return [{ key: 'period', label: 'CCI 周期', type: 'int', min: 2, max: 100, step: 1 }];
+        case 'priceMaCross':
+          return [
+            { key: 'period', label: 'MA 周期', type: 'int', min: 2, max: 200, step: 1 },
+            { key: 'useEma', label: '使用 EMA', type: 'bool' },
+          ];
+        case 'donchianBreakout':
+          return [{ key: 'period', label: '通道周期', type: 'int', min: 3, max: 200, step: 1 }];
+        default:
+          return [];
+      }
+    }
+
+    function kindToCategory(kind) {
+      const map = {
+        'maCross': '均线交叉', 'rsiReversal': 'RSI反转', 'rsiMidline': 'RSI中线',
+        'rsiLongOnly': 'RSI做多', 'macdCross': 'MACD', 'bollReversion': '布林回归', 'bollBreakout': '布林突破',
+        'kdjCross': 'KDJ', 'cciReversal': 'CCI反转', 'cciMidline': 'CCI中线',
+        'priceMaCross': '价格/MA', 'donchianBreakout': '唐奇安突破',
+      };
+      return map[kind] || '其他';
+    }
+
+    async function runTop10Backtest(s, showEditor) {
+      // Build a fake strategy object compatible with openStrategyEditor
+      const schema = kindToParamSchema(s.kind);
+      const defaultParams = { fast:5, slow:20, useEma:false, period:14, oversold:30, overbought:70,
+        bullLevel:50, bearLevel:50, signal:9, k:2.0, threshold:100 };
+      // Merge s.params on top of defaults
+      const mergedParams = { ...defaultParams, ...s.params };
+
+      const fakeStrategy = {
+        id: s.strategyId,
+        name: s.name,
+        description: s.desc + ' (Top10 精选 #' + s.rank + ')',
+        category: kindToCategory(s.kind),
+        kind: s.kind,
+        lookback: s.lookback,
+        paramSchema: schema,
+        defaultParams: mergedParams,
+        index: s.rank,
+      };
+
+      // Close top10 modal, open catalog modal with the strategy editor
+      closeTop10Modal();
+
+      if (showEditor) {
+        // Show the parameter editor (like clicking a strategy card)
+        catalogModal.classList.add('open');
+        openStrategyEditor(fakeStrategy);
+        // Pre-set 4h interval and 100U/100qty/1x
+        setTimeout(() => {
+          const spInt = document.getElementById('sp_interval');
+          if (spInt) spInt.value = '4h';
+          const spCap = document.getElementById('sp_capital');
+          if (spCap) spCap.value = '100';
+          const spQty = document.getElementById('sp_quantity');
+          if (spQty) spQty.value = '100';
+          const spLev = document.getElementById('sp_leverage');
+          if (spLev) spLev.value = '1';
+        }, 50);
+      } else {
+        // Run directly without showing editor — send custom backtest request immediately
+        catalogModal.classList.add('open');
+        catalogBody.innerHTML = `
+          <div style="display:flex; gap:16px; min-height:400px;">
+            <div style="flex:0 0 340px; background:#0d1117; border:1px solid #21262d; border-radius:8px; padding:14px;">
+              <div style="margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                <button id="spBack2" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px;">← 返回</button>
+                <span style="color:#8b949e; font-size:12px;">Top10 精选 #${s.rank}</span>
+              </div>
+              <h3 style="color:#e6edf3; font-size:15px; margin:0 0 4px 0;">${s.name}</h3>
+              <div style="color:#8b949e; font-size:12px; margin-bottom:8px;">${s.desc}</div>
+              <div style="color:#3fb950; font-size:13px; font-weight:600; margin-bottom:8px;">4h 回测中...</div>
+            </div>
+            <div id="spResult" style="flex:1; overflow-y:auto; max-height:65vh;">
+              <div class="bt-empty">正在运行回测，请稍候...</div>
+            </div>
+          </div>
+        `;
+        document.getElementById('spBack2').addEventListener('click', () => {
+          closeCatalogModal();
+        });
+
+        const payload = {
+          strategy_id: s.strategyId,
+          kind: s.kind,
+          lookback: s.lookback,
+          symbol: 'BTCUSDT',
+          interval: '4h',
+          capital: 100,
+          quantity: 100,
+          leverage: 1,
+          fee: 0.0004,
+          limit: 0,
+          params: s.params,
+        };
+
+        try {
+          const data = await fetchJson(`${API_BASE}/api/backtest/custom`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          // Store strategy info for result rendering
+          data.strategy = { ...(data.strategy||{}), name: s.name, description: s.desc, params: s.params };
+          data.parameters = { ...(data.parameters||{}), symbol: 'BTCUSDT', interval: '4h', lookback: s.lookback, capital:100, marginPerTrade:100, leverage:1, notionalPerTrade:100, feeRate:0.0004 };
+          renderCustomBacktestResult(data);
+        } catch(e) {
+          const rel = document.getElementById('spResult');
+          if (rel) rel.innerHTML = `<div class="bt-empty">回测失败：${e.message}</div>`;
+        }
+      }
+    }
+
+    function openBacktestModal() {
+      syncBacktestFormWithChart();
+      backtestModal.classList.add('open');
+      runStrategyCatalog();
+    }
+
+    function buildBacktestPayload() {
+      return {
+        symbol: document.getElementById('btSymbol').value,
+        interval: document.getElementById('btInterval').value,
+        fast_ma: Number(document.getElementById('btFastMa').value),
+        slow_ma: Number(document.getElementById('btSlowMa').value),
+        lookback: Number(document.getElementById('btLookback').value),
+        limit: Number(document.getElementById('btLimit').value),
+        capital: Number(document.getElementById('btCapital').value),
+        quantity: Number(document.getElementById('btQuantity').value),
+        leverage: Number(document.getElementById('btLeverage').value),
+        fee: Number(document.getElementById('btFee').value),
+      };
+    }
+
+    // 毫秒时间戳 → 可读时间（无值显示占位）
+    function fmtTime(ts) {
+      if (ts == null) return '—';
+      const d = new Date(ts);
+      return d.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    async function openDbModal() {
+      dbModal.classList.add('open');
+      dbBody.textContent = '加载中...';
+      try {
+        const data = await fetchJson(`${API_BASE}/api/db`);
+        const rows = data.rows || [];
+        if (rows.length === 0) {
+          dbBody.innerHTML = '<div class="db-empty">数据库暂无数据</div>';
+          return;
+        }
+        let html = '<table class="db-table"><thead><tr><th>合约</th><th>周期</th><th>K线数量</th><th>最早</th><th>最新</th></tr></thead><tbody>';
+        for (const r of rows) {
+          html += `<tr><td>${r.symbol}</td><td>${r.interval}</td><td>${r.count}</td><td>${fmtTime(r.earliest)}</td><td>${fmtTime(r.latest)}</td></tr>`;
+        }
+        html += '</tbody></table>';
+        dbBody.innerHTML = html;
+      } catch (e) {
+        dbBody.innerHTML = `<div class="db-empty">加载失败：${e.message}（请确认后端已启动）</div>`;
+      }
+    }
+
+    async function runBacktest() {
+      const payload = buildBacktestPayload();
+
+      backtestBody.innerHTML = '<div class="bt-empty">回测中...</div>';
+      try {
+        const data = await fetchJson(`${API_BASE}/api/backtest`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        renderBacktestResult(data);
+        void runStrategyCatalog();
+      } catch (e) {
+        backtestBody.innerHTML = `<div class="bt-empty">回测失败：${e.message}</div>`;
+      }
+    }
+
+    async function runStrategyCatalog() {
+      const payload = buildBacktestPayload();
+      backtestCatalog.innerHTML = '<div class="bt-empty">100 个常见策略批量回测中...</div>';
+      try {
+        const data = await fetchJson(`${API_BASE}/api/backtest/catalog`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        renderBacktestCatalogResults(data);
+      } catch (e) {
+        backtestCatalog.innerHTML = `<div class="bt-empty">批量回测失败：${e.message}</div>`;
+      }
+    }
+
+    function renderBacktestResult(data) {
+      const params = data.parameters || {};
+      const summary = data.summary || {};
+      const trades = data.recentTrades || [];
+      const profitClass = Number(summary.netProfit) >= 0 ? 'positive' : 'negative';
+
+      let html = `
+        <div class="bt-meta">
+          <span class="bt-pill">${params.symbol || '—'} · ${params.interval || '—'}</span>
+          <span class="bt-pill">MA${params.fastMa}/${params.slowMa}</span>
+          <span class="bt-pill">Lookback ${params.lookback ?? '—'}</span>
+          <span class="bt-pill">样本 ${summary.bars ?? 0} 根</span>
+          <span class="bt-pill">时间 ${fmtTime(summary.firstOpenTime)} → ${fmtTime(summary.lastCloseTime)}</span>
+        </div>
+        <div class="bt-summary">
+          <div class="bt-card"><span class="label">净收益</span><span class="value ${profitClass}">${fmtNumber(summary.netProfit)}</span></div>
+          <div class="bt-card"><span class="label">收益率</span><span class="value ${profitClass}">${fmtNumber(summary.returnPct)}%</span></div>
+          <div class="bt-card"><span class="label">最终权益</span><span class="value">${fmtNumber(summary.finalEquity)}</span></div>
+          <div class="bt-card"><span class="label">最大回撤</span><span class="value">${fmtNumber(summary.maxDrawdownPct)}%</span></div>
+          <div class="bt-card"><span class="label">胜率</span><span class="value">${fmtNumber(summary.winRatePct)}%</span></div>
+          <div class="bt-card"><span class="label">交易笔数</span><span class="value">${summary.tradeCount ?? 0}</span></div>
+        </div>
+        <div class="bt-meta">
+          <span class="bt-pill">初始资金 ${fmtNumber(params.capital)}U</span>
+          <span class="bt-pill">单次保证金 ${fmtNumber(params.marginPerTrade ?? params.quantity, 2)}U</span>
+          <span class="bt-pill">倍数 ${fmtNumber(params.leverage, 2)}</span>
+          <span class="bt-pill">单次名义仓位 ${fmtNumber(params.notionalPerTrade, 2)}U</span>
+          <span class="bt-pill">手续费率 ${fmtNumber(params.feeRate, 4)}</span>
+          <span class="bt-pill">盈利 ${summary.winCount ?? 0}</span>
+          <span class="bt-pill">亏损 ${summary.lossCount ?? 0}</span>
+          <span class="bt-pill">总手续费 ${fmtNumber(summary.totalFees, 4)}</span>
+        </div>
+      `;
+
+      if (!trades.length) {
+        html += '<div class="bt-empty">本次回测没有触发任何成交。</div>';
+        backtestBody.innerHTML = html;
+        return;
+      }
+
+      html += '<div class="bt-table-wrap"><table class="bt-table"><thead><tr><th>方向</th><th>入场时间</th><th>入场价</th><th>出场时间</th><th>出场价</th><th>净收益</th><th>手续费</th><th>持有根数</th></tr></thead><tbody>';
+      for (const trade of trades) {
+        html += `<tr>
+          <td>${trade.side}</td>
+          <td>${fmtTime(trade.entryTime)}</td>
+          <td>${fmtNumber(trade.entryPrice, 2)}</td>
+          <td>${fmtTime(trade.exitTime)}</td>
+          <td>${fmtNumber(trade.exitPrice, 2)}</td>
+          <td>${fmtNumber(trade.netPnl, 2)}</td>
+          <td>${fmtNumber(trade.fee, 4)}</td>
+          <td>${trade.barsHeld}</td>
+        </tr>`;
+      }
+      html += '</tbody></table></div>';
+      backtestBody.innerHTML = html;
+    }
+
+    function renderBacktestCatalogResults(data) {
+      const params = data.parameters || {};
+      const strategies = data.strategies || [];
+
+      if (!strategies.length) {
+        backtestCatalog.innerHTML = '<div class="bt-empty">没有拿到策略回测结果。</div>';
+        return;
+      }
+
+      let html = `
+        <div class="bt-meta">
+          <span class="bt-pill">${params.symbol || '—'} · ${params.interval || '—'}</span>
+          <span class="bt-pill">样本 ${params.limit ?? '全部'} 根</span>
+          <span class="bt-pill">初始资金 ${fmtNumber(params.capital)}U</span>
+          <span class="bt-pill">单次保证金 ${fmtNumber(params.marginPerTrade ?? params.quantity, 2)}U</span>
+          <span class="bt-pill">倍数 ${fmtNumber(params.leverage, 2)}</span>
+          <span class="bt-pill">单次名义仓位 ${fmtNumber(params.notionalPerTrade, 2)}U</span>
+          <span class="bt-pill">手续费率 ${fmtNumber(params.feeRate, 4)}</span>
+        </div>
+        <div class="catalog-table-wrap">
+          <table class="catalog-table">
+            <thead>
+              <tr>
+                <th>排名</th>
+                <th>策略</th>
+                <th>分类</th>
+                <th>Lookback</th>
+                <th>交易笔数</th>
+                <th>胜率</th>
+                <th>净收益</th>
+                <th>收益率</th>
+                <th>最大回撤</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+
+      for (const strategy of strategies) {
+        const pnlClass = Number(strategy.netProfit) >= 0 ? 'catalog-positive' : 'catalog-negative';
+        html += `
+          <tr>
+            <td>${strategy.rank}</td>
+            <td>
+              <div class="catalog-name">${strategy.name}</div>
+              <div class="catalog-desc">${strategy.description}</div>
+            </td>
+            <td>${strategy.category}</td>
+            <td>${strategy.lookback}</td>
+            <td>${strategy.tradeCount}</td>
+            <td>${fmtNumber(strategy.winRatePct)}%</td>
+            <td class="${pnlClass}">${fmtNumber(strategy.netProfit)}</td>
+            <td class="${pnlClass}">${fmtNumber(strategy.returnPct)}%</td>
+            <td>${fmtNumber(strategy.maxDrawdownPct)}%</td>
+          </tr>
+        `;
+      }
+
+      html += '</tbody></table></div>';
+      backtestCatalog.innerHTML = html;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+symbol,interval,fast_ma,slow_ma,lookback,quantity,fee_rate,initial_capital,first_open_time,last_close_time,bars,trade_count,win_count,loss_count,win_rate_pct,total_fees,net_profit,final_equity,return_pct,max_drawdown_pct
+BTCUSDT,1m,7,25,50,0.01000000,0.00040000,10000.00,1787257380000,1787557379999,5000,248,52,196,20.96774194,152.65721520,-176.27921520,9823.72078480,-1.76279215,1.97815576

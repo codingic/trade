@@ -1,0 +1,26 @@
+# 统一参数配置文件。
+# strategy 读取 [strategy]，backtest 读取 [backtest]。
+# 命令行参数会覆盖这里的值。
+
+[strategy]
+symbol = "BTCUSDT"
+interval = "1m"
+quantity = 1.0
+fast_ma = 7
+slow_ma = 25
+lookback = 50
+poll = 60
+
+[backtest]
+symbol = "BTCUSDT"
+interval = "1m"
+capital = 100.0
+quantity = 10.0
+leverage = 1.0
+fee = 0.0004
+fast_ma = 7
+slow_ma = 25
+lookback = 50
+limit = 5000
+export_csv = "tradedata/backtests/btcusdt_1m_trades.csv"
+export_summary_csv = "tradedata/backtests/btcusdt_1m_summary.csv"

@@ -1,0 +1,10 @@
+# Rust build output
+/target
+**/target
+
+# macOS
+.DS_Store
+
+# Large data files
+tradedata/*.db
+tradedata/*.db-journal

@@ -1,0 +1,9 @@
+[package]
+name = "collector"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+trade-common = { path = "../common" }
+tokio = { workspace = true }
+anyhow = { workspace = true }
