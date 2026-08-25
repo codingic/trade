@@ -659,9 +659,10 @@ fn params_desc(kind: backtest::catalog::StrategyKind, p: &StrategyParams) -> Str
     }
 }
 
-/// 对所有内置策略做参数网格扫描，取最近 `days` 天（4h 周期）内收益率前 `top` 名的组合。
+/// 对所有内置策略做参数网格扫描，取最近 `days` 天内收益率前 `top` 名的组合。
 pub async fn run_sweep(request: SweepQuery) -> Result<Value> {
     let symbol = request.symbol.unwrap_or_else(|| "BTCUSDT".to_string());
+    let interval = request.interval.unwrap_or_else(|| "4h".to_string());
     let days = request.days.unwrap_or(120).max(1);
     let top = request.top.unwrap_or(20).max(1);
 
@@ -670,23 +671,22 @@ pub async fn run_sweep(request: SweepQuery) -> Result<Value> {
     let fee_rate = 0.0004;
 
     let conn = storage::open(storage::DEFAULT_DB_PATH)?;
-    // storage 会把 1m 基础数据聚合成 4h；再取最近 days 天的 4h 根（每天 6 根）
-    let mut klines_4h = storage::klines(&conn, &symbol, "4h").with_context(|| {
-        format!("读取历史数据失败: {} 4h", symbol)
+    let mut klines = storage::klines(&conn, &symbol, &interval).with_context(|| {
+        format!("读取历史数据失败: {} {}", symbol, interval)
     })?;
 
-    let bars_per_day = 6usize;
+    let bars_per_day = bars_per_day_for_interval(&interval);
     let take = days.saturating_mul(bars_per_day);
-    let window: Vec<_> = if klines_4h.len() > take {
-        klines_4h.split_off(klines_4h.len() - take)
+    let window: Vec<_> = if klines.len() > take {
+        klines.split_off(klines.len() - take)
     } else {
-        klines_4h
+        klines
     };
 
     if window.is_empty() {
         return Err(anyhow!(
-            "数据库里没有 {} 的足够历史数据，请先运行 `cargo run -p collector -- backfill 120`",
-            symbol,
+            "数据库里没有 {} {} 的足够历史数据，请先运行 `cargo run -p collector -- backfill 120`",
+            symbol, interval,
         ));
     }
 
@@ -694,7 +694,7 @@ pub async fn run_sweep(request: SweepQuery) -> Result<Value> {
 
     Ok(json!({
         "symbol": symbol,
-        "interval": "4h",
+        "interval": interval,
         "days": days,
         "bars": window.len(),
         "actualDays": (window.len() as f64 / bars_per_day as f64).round(),

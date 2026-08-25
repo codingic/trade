@@ -21,7 +21,7 @@ fn main() -> Result<()> {
 
     // 读取 1m 基础数据，由 storage 聚合成 4h，再取最近 N 天的 4h 根
     let bars_per_day = 6usize; // 4h 周期每天 6 根
-    let klines_4h = storage::klines(&conn, "BTCUSDT", "4h")?;
+    let mut klines_4h = storage::klines(&conn, "BTCUSDT", "4h")?;
     let take = days.saturating_mul(bars_per_day);
     let window: Vec<_> = if klines_4h.len() > take {
         klines_4h.split_off(klines_4h.len() - take)

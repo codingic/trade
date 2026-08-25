@@ -325,7 +325,7 @@
       <button id="refresh" class="active">刷新</button>
       <button id="catalogView">策略目录</button>
       <button id="top10View" style="background:#1f6feb22; border-color:#1f6feb; color:#58a6ff;">🏆 Top10</button>
-      <button id="hy3top20" style="background:#1f6feb22; border-color:#58a6ff; color:#58a6ff;">🚀 hy3top20</button>
+      <button id="top20" style="background:#1f6feb22; border-color:#58a6ff; color:#58a6ff;">🚀 Top20</button>
       <button id="backtestView">策略回测</button>
       <button id="dbView">数据库</button>
     </div>
@@ -373,15 +373,33 @@
     </div>
   </div>
 
-  <!-- hy3top20 参数扫描页面 -->
-  <div class="modal-mask" id="hy3top20Modal">
-    <div class="modal" style="width: min(1180px, 96vw); max-height: 88vh;">
+  <!-- Top20 参数扫描页面 -->
+  <div class="modal-mask" id="top20Modal">
+    <div class="modal" style="width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; border-radius: 0; margin: 0;">
       <div class="modal-header">
-        <h2>🚀 hy3top20 · 4h · 120天策略扫描</h2>
-        <button class="modal-close" id="hy3Close">&times;</button>
+        <h2>🚀 Top20 · 多周期策略扫描</h2>
+        <div style="display:flex; align-items:center; gap:10px; margin-right:20px;">
+          <select id="top20Interval" style="background:#21262d; color:#e6edf3; border:1px solid #30363d; border-radius:4px; padding:4px 8px; font-size:12px;">
+            <option value="1h">1小时</option>
+            <option value="2h">2小时</option>
+            <option value="4h" selected>4小时</option>
+            <option value="6h">6小时</option>
+            <option value="8h">8小时</option>
+            <option value="12h">12小时</option>
+            <option value="1d">日线</option>
+          </select>
+          <select id="top20Days" style="background:#21262d; color:#e6edf3; border:1px solid #30363d; border-radius:4px; padding:4px 8px; font-size:12px;">
+            <option value="60">60天</option>
+            <option value="120" selected>120天</option>
+            <option value="180">180天</option>
+            <option value="240">240天</option>
+          </select>
+          <button id="top20Rescan" style="background:#238636; color:#fff; border:none; border-radius:4px; padding:5px 12px; font-size:12px; cursor:pointer;">🔄 重新扫描</button>
+        </div>
+        <button class="modal-close" id="top20Close">&times;</button>
       </div>
-      <div class="modal-body" id="hy3top20Body">
-        <div class="bt-empty">扫描中，请稍候（正在对全部策略做参数网格遍历）...</div>
+      <div class="modal-body" id="top20Body" style="max-height: calc(100vh - 60px);">
+        <div class="bt-empty">点击「重新扫描」选择周期后开始扫描（正在对全部策略做参数网格遍历）...</div>
       </div>
     </div>
   </div>
@@ -709,8 +727,8 @@
     const catalogBody = document.getElementById('catalogBody');
     const backtestModal = document.getElementById('backtestModal');
     const backtestBody = document.getElementById('backtestBody');
-    const hy3Modal = document.getElementById('hy3top20Modal');
-    const hy3Body = document.getElementById('hy3top20Body');
+    const top20ModalEl = document.getElementById('top20Modal');
+    const top20Body = document.getElementById('top20Body');
     const backtestCatalog = document.getElementById('backtestCatalog');
     const backtestForm = document.getElementById('backtestForm');
     const backtestRunButton = document.getElementById('btRun');
@@ -718,12 +736,13 @@
     document.getElementById('dbView').addEventListener('click', openDbModal);
     document.getElementById('catalogView').addEventListener('click', openCatalogModal);
     document.getElementById('top10View').addEventListener('click', openTop10Modal);
-    document.getElementById('hy3top20').addEventListener('click', openHy3Modal);
+    document.getElementById('top20').addEventListener('click', openTop20Modal);
     document.getElementById('backtestView').addEventListener('click', openBacktestModal);
     document.getElementById('dbClose').addEventListener('click', closeDbModal);
     document.getElementById('catalogClose').addEventListener('click', closeCatalogModal);
     document.getElementById('top10Close').addEventListener('click', closeTop10Modal);
-    document.getElementById('hy3Close').addEventListener('click', closeHy3Modal);
+    document.getElementById('top20Close').addEventListener('click', closeTop20Modal);
+    document.getElementById('top20Rescan').addEventListener('click', loadTop20);
     document.getElementById('backtestClose').addEventListener('click', closeBacktestModal);
     document.getElementById('btSync').addEventListener('click', syncBacktestFormWithChart);
     backtestRunButton.addEventListener('click', runBacktest);
@@ -736,14 +755,15 @@
     dbModal.addEventListener('click', e => { if (e.target === dbModal) closeDbModal(); });
     catalogModal.addEventListener('click', e => { if (e.target === catalogModal) closeCatalogModal(); });
     backtestModal.addEventListener('click', e => { if (e.target === backtestModal) closeBacktestModal(); });
-    hy3Modal.addEventListener('click', e => { if (e.target === hy3Modal) closeHy3Modal(); });
+    top20ModalEl.addEventListener('click', e => { if (e.target === top20ModalEl) closeTop20Modal(); });
     // 按 Esc 关闭
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
         closeDbModal();
         closeCatalogModal();
         closeBacktestModal();
-        closeHy3Modal();
+        closeTop10Modal();
+        closeTop20Modal();
       }
     });
 
@@ -829,144 +849,222 @@
       });
     }
 
-    function openStrategyEditor(strategy) {
+    function openStrategyEditor(strategy, options = {}) {
+      const isCompound = !!options.compound;
       const params = strategy.defaultParams || {};
       const schema = strategy.paramSchema || [];
 
+      const inputStyle = 'width:100%; background:#0d1117; color:#e6edf3; border:1px solid #30363d; border-radius:4px; padding:5px 8px; font-size:12px; box-sizing:border-box;';
+      const selectStyle = inputStyle;
       let formHtml = '';
       for (const field of schema) {
         const key = field.key;
         const label = field.label;
         const val = key in params ? params[key] : '';
-        if (field.type === 'bool') {
+        const fieldType = String(field.type || '').toLowerCase();
+        if (fieldType === 'bool') {
           formHtml += `
             <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
-              <input type="checkbox" id="sp_${key}" ${val ? 'checked' : ''} style="width:auto;">
-              <label for="sp_${key}" style="color:#c9d1d9; font-size:13px; cursor:pointer;">${label} (${key})</label>
+              <input type="checkbox" id="sp_${key}" ${val ? 'checked' : ''} style="width:auto; accent-color:#238636;">
+              <label for="sp_${key}" style="color:#c9d1d9; font-size:13px; cursor:pointer;">${label}</label>
             </div>`;
-        } else if (field.type === 'float') {
+        } else {
           formHtml += `
             <div style="margin-bottom:10px;">
               <label for="sp_${key}" style="color:#8b949e; font-size:12px; display:block; margin-bottom:3px;">${label} <span style="color:#484f58;">(${field.min}~${field.max})</span></label>
-              <input id="sp_${key}" type="number" value="${val}" min="${field.min}" max="${field.max}" step="${field.step}" style="width:100%;">
-            </div>`;
-        } else { // int
-          formHtml += `
-            <div style="margin-bottom:10px;">
-              <label for="sp_${key}" style="color:#8b949e; font-size:12px; display:block; margin-bottom:3px;">${label} <span style="color:#484f58;">(${field.min}~${field.max})</span></label>
-              <input id="sp_${key}" type="number" value="${val}" min="${field.min}" max="${field.max}" step="${field.step}" style="width:100%;">
+              <input id="sp_${key}" type="number" value="${val}" min="${field.min}" max="${field.max}" step="${field.step}" style="${inputStyle}">
             </div>`;
         }
       }
 
-      // 回测参数（资金/杠杆等）
-      const capVal = document.getElementById('btCapital')?.value || 100;
-      const qtyVal = document.getElementById('btQuantity')?.value || 100;
-      const levVal = document.getElementById('btLeverage')?.value || 1;
-      const feeVal = document.getElementById('btFee')?.value || 0.0004;
-      const limVal = document.getElementById('btLimit')?.value || 5000;
-      const symVal = document.getElementById('btSymbol')?.value || 'BTCUSDT';
-      const intVal = document.getElementById('btInterval')?.value || '1m';
+      // 回测参数默认值：复利模式默认4h/100U/1x/0.0004/120天
+      const capVal = isCompound ? 100 : (document.getElementById('btCapital')?.value || 100);
+      const qtyVal = isCompound ? 100 : (document.getElementById('btQuantity')?.value || 100);
+      const levVal = isCompound ? 1 : (document.getElementById('btLeverage')?.value || 1);
+      const feeVal = isCompound ? 0.0004 : (document.getElementById('btFee')?.value || 0.0004);
+      const daysVal = options.defaultDays || 120;
+      const limVal = document.getElementById('btLimit')?.value || 0;
+      const symVal = options.defaultSymbol || (isCompound ? (document.getElementById('symbol')?.value || 'BTCUSDT') : (document.getElementById('btSymbol')?.value || 'BTCUSDT'));
+      const intVal = options.defaultInterval || (isCompound ? '4h' : (document.getElementById('btInterval')?.value || '1m'));
+
+      // 回测设置区域HTML
+      let settingsHtml;
+      if (isCompound) {
+        settingsHtml = `
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div>
+              <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">合约</label>
+              <input id="sp_symbol" value="${symVal}" style="${inputStyle}">
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">周期</label>
+              <select id="sp_interval" style="${selectStyle}">
+                <option value="1h" ${intVal==='1h'?'selected':''}>1h</option>
+                <option value="2h" ${intVal==='2h'?'selected':''}>2h</option>
+                <option value="4h" ${intVal==='4h'?'selected':''}>4h</option>
+                <option value="6h" ${intVal==='6h'?'selected':''}>6h</option>
+                <option value="8h" ${intVal==='8h'?'selected':''}>8h</option>
+                <option value="12h" ${intVal==='12h'?'selected':''}>12h</option>
+                <option value="1d" ${intVal==='1d'?'selected':''}>1d</option>
+              </select>
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">初始资金(U)</label>
+              <input id="sp_capital" type="number" value="${capVal}" min="1" step="10" style="${inputStyle}">
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">杠杆倍数</label>
+              <input id="sp_leverage" type="number" value="${levVal}" min="0.1" step="0.1" style="${inputStyle}">
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">手续费率</label>
+              <input id="sp_fee" type="number" value="${feeVal}" min="0" step="0.0001" style="${inputStyle}">
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">回测天数</label>
+              <input id="sp_days" type="number" value="${daysVal}" min="1" step="10" style="${inputStyle}">
+            </div>
+            <div style="grid-column:span 2;">
+              <div style="color:#3fb950; font-size:11px; background:#0d1117; border:1px solid #23863644; border-radius:4px; padding:6px 8px;">
+                💡 复利模式：每次用 95% 可用资金开仓，自动滚动
+              </div>
+            </div>
+          </div>`;
+      } else {
+        settingsHtml = `
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div>
+              <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">合约</label>
+              <input id="sp_symbol" value="${symVal}" style="${inputStyle}">
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">周期</label>
+              <select id="sp_interval" style="${selectStyle}">
+                <option value="1m" ${intVal==='1m'?'selected':''}>1m</option>
+                <option value="5m" ${intVal==='5m'?'selected':''}>5m</option>
+                <option value="15m" ${intVal==='15m'?'selected':''}>15m</option>
+                <option value="1h" ${intVal==='1h'?'selected':''}>1h</option>
+                <option value="4h" ${intVal==='4h'?'selected':''}>4h</option>
+              </select>
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">资金(U)</label>
+              <input id="sp_capital" type="number" value="${capVal}" min="1" step="10" style="${inputStyle}">
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">保证金(U)</label>
+              <input id="sp_quantity" type="number" value="${qtyVal}" min="1" step="1" style="${inputStyle}">
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">杠杆倍数</label>
+              <input id="sp_leverage" type="number" value="${levVal}" min="1" step="1" style="${inputStyle}">
+            </div>
+            <div>
+              <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">手续费率</label>
+              <input id="sp_fee" type="number" value="${feeVal}" min="0" step="0.0001" style="${inputStyle}">
+            </div>
+            <div style="grid-column:span 2;">
+              <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">K线数量(0=全部)</label>
+              <input id="sp_limit" type="number" value="${limVal}" min="0" step="500" style="${inputStyle}">
+            </div>
+          </div>`;
+      }
+
+      const editorTitle = isCompound ? '编辑参数 · 复利模式' : '编辑参数';
+      const runBtnText = isCompound ? '▶ 运行复利回测' : '▶ 运行回测';
 
       catalogBody.innerHTML = `
         <div style="display:flex; gap:16px; min-height:400px;">
           <div style="flex:0 0 340px; background:#0d1117; border:1px solid #21262d; border-radius:8px; padding:14px; overflow-y:auto; max-height:65vh;">
             <div style="margin-bottom:12px; display:flex; align-items:center; gap:8px;">
               <button id="spBack" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px;">← 返回</button>
-              <span style="color:#8b949e; font-size:12px;">编辑参数</span>
+              <span style="color:#8b949e; font-size:12px;">${editorTitle}</span>
             </div>
             <h3 style="color:#e6edf3; font-size:15px; margin:0 0 4px 0;">${strategy.name}</h3>
             <div style="color:#8b949e; font-size:12px; margin-bottom:12px;">${strategy.description}</div>
-            <div style="color:#484f58; font-size:10px; font-family:monospace; margin-bottom:12px;">${strategy.id} · ${strategy.category}</div>
+            <div style="color:#484f58; font-size:10px; font-family:monospace; margin-bottom:12px;">${strategy.id || strategy.kind} · ${strategy.category}</div>
             <hr style="border:none; border-top:1px solid #21262d; margin:10px 0;">
             <div style="color:#58a6ff; font-size:12px; font-weight:600; margin-bottom:8px;">策略参数</div>
             ${formHtml}
             <hr style="border:none; border-top:1px solid #21262d; margin:10px 0;">
             <div style="color:#58a6ff; font-size:12px; font-weight:600; margin-bottom:8px;">回测设置</div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-              <div>
-                <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">合约</label>
-                <input id="sp_symbol" value="${symVal}" style="width:100%;">
-              </div>
-              <div>
-                <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">周期</label>
-                <select id="sp_interval" style="width:100%;">
-                  <option value="1m" ${intVal==='1m'?'selected':''}>1m</option>
-                  <option value="5m" ${intVal==='5m'?'selected':''}>5m</option>
-                  <option value="15m" ${intVal==='15m'?'selected':''}>15m</option>
-                  <option value="1h" ${intVal==='1h'?'selected':''}>1h</option>
-                  <option value="4h" ${intVal==='4h'?'selected':''}>4h</option>
-                </select>
-              </div>
-              <div>
-                <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">资金(U)</label>
-                <input id="sp_capital" type="number" value="${capVal}" min="1" step="10" style="width:100%;">
-              </div>
-              <div>
-                <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">保证金(U)</label>
-                <input id="sp_quantity" type="number" value="${qtyVal}" min="1" step="1" style="width:100%;">
-              </div>
-              <div>
-                <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">杠杆倍数</label>
-                <input id="sp_leverage" type="number" value="${levVal}" min="1" step="1" style="width:100%;">
-              </div>
-              <div>
-                <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">手续费率</label>
-                <input id="sp_fee" type="number" value="${feeVal}" min="0" step="0.0001" style="width:100%;">
-              </div>
-              <div style="grid-column:span 2;">
-                <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">K线数量(0=全部)</label>
-                <input id="sp_limit" type="number" value="${limVal}" min="0" step="500" style="width:100%;">
-              </div>
-            </div>
-            <button id="spRun" style="width:100%; margin-top:14px; background:#238636; color:#fff; border:none; border-radius:6px; padding:9px; font-size:13px; font-weight:600; cursor:pointer;">▶ 运行回测</button>
+            ${settingsHtml}
+            <button id="spRun" style="width:100%; margin-top:14px; background:#238636; color:#fff; border:none; border-radius:6px; padding:9px; font-size:13px; font-weight:600; cursor:pointer;">${runBtnText}</button>
           </div>
           <div id="spResult" style="flex:1; overflow-y:auto; max-height:65vh;">
             <div class="bt-empty">在左侧调整参数后点击「运行回测」查看结果。</div>
           </div>
         </div>`;
 
+      // Store compound flag on the button for later use
+      document.getElementById('spRun').dataset.compound = isCompound ? '1' : '0';
+      document.getElementById('spRun').dataset.kind = strategy.kind || '';
+      document.getElementById('spRun').dataset.lookback = strategy.lookback || 0;
+
       document.getElementById('spBack').addEventListener('click', () => {
-        loadStrategies();
+        if (isCompound && options.backAction) {
+          options.backAction();
+        } else {
+          loadStrategies();
+        }
       });
       document.getElementById('spRun').addEventListener('click', () => {
-        runCustomBacktest(strategy);
+        runEditorBacktest(strategy, isCompound);
       });
     }
 
-    async function runCustomBacktest(strategy) {
+    async function runEditorBacktest(strategy, isCompound) {
       const schema = strategy.paramSchema || [];
       const params = {};
       for (const field of schema) {
         const key = field.key;
         const el = document.getElementById('sp_' + key);
         if (!el) continue;
-        if (field.type === 'bool') {
+        const fieldType = String(field.type || '').toLowerCase();
+        if (fieldType === 'bool') {
           params[key] = el.checked;
-        } else if (field.type === 'float') {
+        } else if (fieldType === 'float') {
           params[key] = parseFloat(el.value) || 0;
         } else {
           params[key] = parseInt(el.value) || 0;
         }
       }
 
-      const payload = {
-        strategy_id: strategy.id,
-        symbol: document.getElementById('sp_symbol').value,
-        interval: document.getElementById('sp_interval').value,
-        capital: parseFloat(document.getElementById('sp_capital').value) || 100,
-        quantity: parseFloat(document.getElementById('sp_quantity').value) || 100,
-        leverage: parseFloat(document.getElementById('sp_leverage').value) || 1,
-        fee: parseFloat(document.getElementById('sp_fee').value) || 0.0004,
-        limit: parseInt(document.getElementById('sp_limit').value) || 0,
-        lookback: strategy.lookback || 50,
-        params: params,
-      };
-
       const resultEl = document.getElementById('spResult');
-      resultEl.innerHTML = '<div class="bt-empty">回测中...</div>';
+      resultEl.innerHTML = '<div class="bt-empty">' + (isCompound ? '复利回测中...' : '回测中...') + '</div>';
+
+      let endpoint, payload;
+      if (isCompound) {
+        endpoint = `${API_BASE}/api/backtest/compound`;
+        payload = {
+          kind: strategy.kind,
+          symbol: document.getElementById('sp_symbol').value,
+          interval: document.getElementById('sp_interval').value,
+          days: parseInt(document.getElementById('sp_days').value) || 120,
+          lookback: parseInt(document.getElementById('spRun').dataset.lookback) || strategy.lookback || 0,
+          capital: parseFloat(document.getElementById('sp_capital').value) || 100,
+          leverage: parseFloat(document.getElementById('sp_leverage').value) || 1,
+          fee: parseFloat(document.getElementById('sp_fee').value) || 0.0004,
+          params: params,
+        };
+      } else {
+        endpoint = `${API_BASE}/api/backtest/custom`;
+        payload = {
+          strategy_id: strategy.id,
+          symbol: document.getElementById('sp_symbol').value,
+          interval: document.getElementById('sp_interval').value,
+          capital: parseFloat(document.getElementById('sp_capital').value) || 100,
+          quantity: parseFloat(document.getElementById('sp_quantity').value) || 100,
+          leverage: parseFloat(document.getElementById('sp_leverage').value) || 1,
+          fee: parseFloat(document.getElementById('sp_fee').value) || 0.0004,
+          limit: parseInt(document.getElementById('sp_limit').value) || 0,
+          lookback: strategy.lookback || 50,
+          params: params,
+        };
+      }
+
       try {
-        const data = await fetchJson(`${API_BASE}/api/backtest/custom`, {
+        const data = await fetchJson(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -975,6 +1073,11 @@
       } catch (e) {
         resultEl.innerHTML = `<div class="bt-empty">回测失败：${e.message}</div>`;
       }
+    }
+
+    // 保持旧函数名作为别名，兼容其他调用
+    async function runCustomBacktest(strategy) {
+      return runEditorBacktest(strategy, false);
     }
 
     function renderCustomBacktestResult(data) {
@@ -1014,11 +1117,13 @@
         </div>
         <div class="bt-meta">
           <span class="bt-pill">初始资金 ${fmtNumber(params.capital)}U</span>
-          <span class="bt-pill">保证金 ${fmtNumber(params.marginPerTrade, 2)}U</span>
+          ${params.days ? `<span class="bt-pill">复利全仓</span>` : ''}
+          ${!params.days && params.marginPerTrade != null ? `<span class="bt-pill">保证金 ${fmtNumber(params.marginPerTrade, 2)}U</span>` : ''}
           <span class="bt-pill">倍数 ${fmtNumber(params.leverage, 2)}x</span>
-          <span class="bt-pill">名义仓位 ${fmtNumber(params.notionalPerTrade, 2)}U</span>
+          ${!params.days && params.notionalPerTrade != null ? `<span class="bt-pill">名义仓位 ${fmtNumber(params.notionalPerTrade, 2)}U</span>` : ''}
           <span class="bt-pill">手续费 ${fmtNumber(summary.totalFees, 4)}U</span>
           <span class="bt-pill">盈 ${summary.winCount ?? 0} · 亏 ${summary.lossCount ?? 0}</span>
+          ${params.days ? `<span class="bt-pill">回测约 ${Math.round(params.days)} 天</span>` : ''}
         </div>`;
 
       if (!trades.length) {
@@ -1272,46 +1377,58 @@
       top10Modal.classList.remove('open');
     }
 
-    function openHy3Modal() {
-      hy3Modal.classList.add('open');
-      loadHy3Top20();
+    let lastSweepInterval = '4h';
+    let lastSweepDays = 120;
+
+    function openTop20Modal() {
+      top20ModalEl.classList.add('open');
+      loadTop20();
     }
 
-    function closeHy3Modal() {
-      hy3Modal.classList.remove('open');
+    function closeTop20Modal() {
+      top20ModalEl.classList.remove('open');
     }
 
-    async function loadHy3Top20() {
+    async function loadTop20() {
       const symbol = document.getElementById('symbol').value;
-      const days = 120;
+      const interval = document.getElementById('top20Interval').value;
+      const days = parseInt(document.getElementById('top20Days').value);
       const top = 20;
-      hy3Body.innerHTML = '<div class="bt-empty">扫描中，请稍候（正在对全部策略做参数网格遍历）...</div>';
+      lastSweepInterval = interval;
+      lastSweepDays = days;
+      const intervalLabel = { '1h':'1小时','2h':'2小时','4h':'4小时','6h':'6小时','8h':'8小时','12h':'12小时','1d':'日线' }[interval] || interval;
+      top20Body.innerHTML = `<div class="bt-empty">正在扫描 ${symbol} · ${intervalLabel} · ${days}天，请稍候（正在对全部策略做参数网格遍历）...</div>`;
       try {
-        const data = await fetchJson(`${API_BASE}/api/backtest/sweep?symbol=${encodeURIComponent(symbol)}&days=${days}&top=${top}`);
-        renderHy3Top20(data);
+        const data = await fetchJson(`${API_BASE}/api/backtest/sweep?symbol=${encodeURIComponent(symbol)}&interval=${interval}&days=${days}&top=${top}`);
+        renderTop20(data);
       } catch (e) {
-        hy3Body.innerHTML = `<div class="bt-empty">扫描失败：${e.message}（请确认后端已启动且数据库有足够 ${symbol} 历史数据）</div>`;
+        top20Body.innerHTML = `<div class="bt-empty">扫描失败：${e.message}（请确认后端已启动且数据库有足够 ${symbol} 历史数据）</div>`;
       }
     }
 
-    function renderHy3Top20(data) {
+    function renderTop20(data) {
       const rows = data.rows || [];
-      const actualDays = data.actualDays != null ? data.actualDays : (data.bars / 6);
+      const interval = data.interval || lastSweepInterval;
+      const days = data.days || lastSweepDays;
+      const intervalLabel = { '1h':'1h','2h':'2h','4h':'4h','6h':'6h','8h':'8h','12h':'12h','1d':'1d' }[interval] || interval;
+      const barsPerDay = interval === '1d' ? 1 : (24 / parseInt(interval.replace('h','')));
+      const actualDays = data.actualDays != null ? data.actualDays : Math.round(data.bars / barsPerDay);
       const fmtTime = (ts) => ts == null ? '—' : new Date(ts).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const symbol = document.getElementById('symbol').value;
 
       let html = `
         <div class="top10-header-info">
-          <span>📊 数据周期: <b>${data.symbol} · 4h · 约${actualDays}天</b></span>
+          <span>📊 数据周期: <b>${data.symbol} · ${intervalLabel} · 约${actualDays}天</b></span>
           <span>💰 资金: <b>100U · 1x杠杆 · 复利全仓</b></span>
           <span>💸 手续费: <b>0.04%</b></span>
-          <span>🔍 样本: <b>${data.bars} 根 4h</b>（${fmtTime(data.firstOpenTime)} → ${fmtTime(data.lastCloseTime)}）</span>
+          <span>🔍 样本: <b>${data.bars} 根 ${intervalLabel}</b>（${fmtTime(data.firstOpenTime)} → ${fmtTime(data.lastCloseTime)}）</span>
         </div>
         <div class="catalog-table-wrap">
           <table class="catalog-table">
             <thead>
               <tr>
                 <th>排名</th><th>策略</th><th>分类</th><th>参数</th>
-                <th>收益率</th><th>胜率</th><th>笔数</th><th>最大回撤</th><th>净收益U</th><th>回测</th>
+                <th>收益率</th><th>胜率</th><th>笔数</th><th>最大回撤</th><th>净收益U</th><th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -1324,7 +1441,7 @@
       for (const r of rows) {
         const pnlClass = Number(r.returnPct) >= 0 ? 'catalog-positive' : 'catalog-negative';
         html += `
-          <tr data-rank="${r.rank}">
+          <tr data-rank="${r.rank}" style="cursor:pointer;">
             <td>${r.rank}</td>
             <td><div class="catalog-name">${r.name}</div><div class="catalog-desc">${r.category}</div></td>
             <td>${r.category}</td>
@@ -1334,69 +1451,133 @@
             <td>${r.trades}</td>
             <td>${fmtNumber(r.maxDd)}%</td>
             <td>${fmtNumber(r.netProfit, 2)}</td>
-            <td><button class="top10-run" data-rank="${r.rank}">▶ 回测</button></td>
+            <td>
+              <button class="top10-run" data-rank="${r.rank}" style="margin-right:4px;">▶ 回测</button>
+              <button class="top20-edit" data-rank="${r.rank}" style="background:#21262d; color:#58a6ff; border:1px solid #30363d; border-radius:4px; padding:3px 8px; font-size:11px; cursor:pointer;">✏️ 编辑</button>
+            </td>
           </tr>`;
       }
 
       html += '</tbody></table></div>';
       html += `
         <div style="margin-top:14px; padding:10px 14px; background:#161b22; border:1px solid #30363d; border-radius:8px; font-size:11px; color:#8b949e;">
-          ⚠️ 以上为对全部策略「参数网格」遍历后按收益率排序的前 20 名，基于历史数据回测（复利全仓），不构成投资建议。点击「回测」会用与扫描完全相同的复利引擎、相同的 120 天窗口重新运行该组合。
+          ⚠️ 以上为对全部策略「参数网格」遍历后按收益率排序的前 20 名，基于历史数据回测（复利全仓），不构成投资建议。点击行直接运行复利回测；点击「✏️ 编辑」可修改参数后再回测。
         </div>`;
 
-      hy3Body.innerHTML = html;
+      top20Body.innerHTML = html;
 
-      hy3Body.querySelectorAll('.top10-run').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          const rank = parseInt(btn.dataset.rank);
+      // 点击行 → 直接运行回测
+      top20Body.querySelectorAll('tr[data-rank]').forEach(row => {
+        row.addEventListener('click', (e) => {
+          if (e.target.tagName === 'BUTTON') return;
+          const rank = parseInt(row.dataset.rank);
           const r = rows.find(x => x.rank === rank);
-          if (!r) return;
-
-          closeHy3Modal();
-          catalogModal.classList.add('open');
-          catalogBody.innerHTML = `
-            <div style="display:flex; gap:16px; min-height:400px;">
-              <div style="flex:0 0 340px; background:#0d1117; border:1px solid #21262d; border-radius:8px; padding:14px;">
-                <div style="margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-                  <button id="spBack2" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px;">← 返回</button>
-                  <span style="color:#8b949e; font-size:12px;">hy3top20 · #${r.rank}</span>
-                </div>
-                <h3 style="color:#e6edf3; font-size:15px; margin:0 0 4px 0;">${r.name}</h3>
-                <div style="color:#8b949e; font-size:12px; margin-bottom:8px;">${r.paramsDesc}</div>
-                <div style="color:#3fb950; font-size:13px; font-weight:600; margin-bottom:8px;">4h 复利回测中...</div>
-              </div>
-              <div id="spResult" style="flex:1; overflow-y:auto; max-height:65vh;">
-                <div class="bt-empty">正在运行复利回测，请稍候...</div>
-              </div>
-            </div>
-          `;
-          document.getElementById('spBack2').addEventListener('click', () => {
-            closeCatalogModal();
-          });
-
-          try {
-            const data = await fetchJson(`${API_BASE}/api/backtest/compound`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                symbol: document.getElementById('symbol').value,
-                interval: '4h',
-                days: 120,
-                lookback: r.lookback,
-                kind: r.kind,
-                capital: 100,
-                leverage: 1,
-                fee: 0.0004,
-                params: r.params,
-              }),
-            });
-            renderCustomBacktestResult(data);
-          } catch (err) {
-            const rel = document.getElementById('spResult');
-            if (rel) rel.innerHTML = `<div class="bt-empty">复利回测失败：${err.message}</div>`;
-          }
+          if (r) runTop20Backtest(r, symbol, interval, days, false);
         });
       });
+
+      // 点击「▶ 回测」按钮 → 直接运行
+      top20Body.querySelectorAll('.top10-run').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const rank = parseInt(btn.dataset.rank);
+          const r = rows.find(x => x.rank === rank);
+          if (r) runTop20Backtest(r, symbol, interval, days, false);
+        });
+      });
+
+      // 点击「✏️ 编辑」按钮 → 打开编辑器
+      top20Body.querySelectorAll('.top20-edit').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const rank = parseInt(btn.dataset.rank);
+          const r = rows.find(x => x.rank === rank);
+          if (r) runTop20Backtest(r, symbol, interval, days, true);
+        });
+      });
+    }
+
+    async function runTop20Backtest(r, symbol, interval, days, showEditor) {
+      const schema = kindToParamSchema(r.kind);
+      const defaultParams = { fast:5, slow:20, useEma:false, period:14, oversold:30, overbought:70,
+        bullLevel:50, bearLevel:50, signal:9, k:2.0, threshold:100 };
+      const mergedParams = { ...defaultParams, ...r.params };
+
+      const fakeStrategy = {
+        id: kindToStrategyId(r.kind),
+        name: r.name,
+        description: r.category + ' (Top20 #' + r.rank + ')',
+        category: kindToCategory(r.kind),
+        kind: r.kind,
+        lookback: r.lookback,
+        paramSchema: schema,
+        defaultParams: mergedParams,
+        index: r.rank,
+      };
+
+      closeTop20Modal();
+
+      if (showEditor) {
+        catalogModal.classList.add('open');
+        openStrategyEditor(fakeStrategy, {
+          compound: true,
+          defaultSymbol: symbol,
+          defaultInterval: interval,
+          defaultDays: days,
+          backAction: () => {
+            closeCatalogModal();
+            openTop20Modal();
+          },
+        });
+      } else {
+        catalogModal.classList.add('open');
+        const intervalLabel = { '1h':'1小时','2h':'2小时','4h':'4小时','6h':'6小时','8h':'8小时','12h':'12小时','1d':'日线' }[interval] || interval;
+        catalogBody.innerHTML = `
+          <div style="display:flex; gap:16px; min-height:400px;">
+            <div style="flex:0 0 340px; background:#0d1117; border:1px solid #21262d; border-radius:8px; padding:14px;">
+              <div style="margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                <button id="spBack2" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px;">← 返回</button>
+                <span style="color:#8b949e; font-size:12px;">Top20 #${r.rank} · ${intervalLabel}</span>
+              </div>
+              <h3 style="color:#e6edf3; font-size:15px; margin:0 0 4px 0;">${r.name}</h3>
+              <div style="color:#8b949e; font-size:12px; margin-bottom:8px;">${r.paramsDesc}</div>
+              <div style="color:#8b949e; font-size:11px; margin-bottom:8px; font-family:monospace;">${symbol} · ${intervalLabel} · ${days}天 · 复利全仓</div>
+              <div style="color:#3fb950; font-size:13px; font-weight:600; margin-bottom:8px;">复利回测中...</div>
+            </div>
+            <div id="spResult" style="flex:1; overflow-y:auto; max-height: calc(100vh - 100px);">
+              <div class="bt-empty">正在运行复利回测，请稍候...</div>
+            </div>
+          </div>
+        `;
+        document.getElementById('spBack2').addEventListener('click', () => {
+          closeCatalogModal();
+          openTop20Modal();
+        });
+
+        const payload = {
+          kind: r.kind,
+          symbol: symbol,
+          interval: interval,
+          days: days,
+          lookback: r.lookback,
+          capital: 100,
+          leverage: 1,
+          fee: 0.0004,
+          params: r.params,
+        };
+
+        try {
+          const data = await fetchJson(`${API_BASE}/api/backtest/compound`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          renderCustomBacktestResult(data);
+        } catch(e) {
+          const rel = document.getElementById('spResult');
+          if (rel) rel.innerHTML = `<div class="bt-empty">复利回测失败：${e.message}</div>`;
+        }
+      }
     }
 
     function renderTop10() {
@@ -1588,22 +1769,18 @@
       closeTop10Modal();
 
       if (showEditor) {
-        // Show the parameter editor (like clicking a strategy card)
+        // Show compound-mode parameter editor
         catalogModal.classList.add('open');
-        openStrategyEditor(fakeStrategy);
-        // Pre-set 4h interval and 100U/100qty/1x
-        setTimeout(() => {
-          const spInt = document.getElementById('sp_interval');
-          if (spInt) spInt.value = '4h';
-          const spCap = document.getElementById('sp_capital');
-          if (spCap) spCap.value = '100';
-          const spQty = document.getElementById('sp_quantity');
-          if (spQty) spQty.value = '100';
-          const spLev = document.getElementById('sp_leverage');
-          if (spLev) spLev.value = '1';
-        }, 50);
+        openStrategyEditor(fakeStrategy, {
+          compound: true,
+          defaultDays: 120,
+          backAction: () => {
+            closeCatalogModal();
+            openTop10Modal();
+          },
+        });
       } else {
-        // Run directly without showing editor — send custom backtest request immediately
+        // Run directly without showing editor — use compound backtest (same as sweep)
         catalogModal.classList.add('open');
         catalogBody.innerHTML = `
           <div style="display:flex; gap:16px; min-height:400px;">
@@ -1614,44 +1791,41 @@
               </div>
               <h3 style="color:#e6edf3; font-size:15px; margin:0 0 4px 0;">${s.name}</h3>
               <div style="color:#8b949e; font-size:12px; margin-bottom:8px;">${s.desc}</div>
-              <div style="color:#3fb950; font-size:13px; font-weight:600; margin-bottom:8px;">4h 回测中...</div>
+              <div style="color:#8b949e; font-size:11px; margin-bottom:8px; font-family:monospace;">BTCUSDT · 4h · 120天 · 复利全仓</div>
+              <div style="color:#3fb950; font-size:13px; font-weight:600; margin-bottom:8px;">复利回测中...</div>
             </div>
             <div id="spResult" style="flex:1; overflow-y:auto; max-height:65vh;">
-              <div class="bt-empty">正在运行回测，请稍候...</div>
+              <div class="bt-empty">正在运行复利回测，请稍候...</div>
             </div>
           </div>
         `;
         document.getElementById('spBack2').addEventListener('click', () => {
           closeCatalogModal();
+          openTop10Modal();
         });
 
         const payload = {
-          strategy_id: s.strategyId,
           kind: s.kind,
-          lookback: s.lookback,
           symbol: 'BTCUSDT',
           interval: '4h',
+          days: 120,
+          lookback: s.lookback,
           capital: 100,
-          quantity: 100,
           leverage: 1,
           fee: 0.0004,
-          limit: 0,
           params: s.params,
         };
 
         try {
-          const data = await fetchJson(`${API_BASE}/api/backtest/custom`, {
+          const data = await fetchJson(`${API_BASE}/api/backtest/compound`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
-          // Store strategy info for result rendering
-          data.strategy = { ...(data.strategy||{}), name: s.name, description: s.desc, params: s.params };
-          data.parameters = { ...(data.parameters||{}), symbol: 'BTCUSDT', interval: '4h', lookback: s.lookback, capital:100, marginPerTrade:100, leverage:1, notionalPerTrade:100, feeRate:0.0004 };
           renderCustomBacktestResult(data);
         } catch(e) {
           const rel = document.getElementById('spResult');
-          if (rel) rel.innerHTML = `<div class="bt-empty">回测失败：${e.message}</div>`;
+          if (rel) rel.innerHTML = `<div class="bt-empty">复利回测失败：${e.message}</div>`;
         }
       }
     }

@@ -110,11 +110,8 @@ pub fn run_compound_backtest(
     let mut total_fees = 0.0f64;
     let mut trade_records = Vec::new();
 
-    for index in lookback..klines.len().saturating_sub(1) {
-        let window = &klines[index + 1 - lookback..=index];
-        let bar = &klines[index];
-        let next_bar = &klines[index + 1];
-
+    for (index, bar) in klines.iter().enumerate() {
+        // 先计算当前 K 线收盘时的权益（用于回撤统计）
         let equity = match &position {
             Some(p) => cash + p.margin + p.gross_pnl(bar.close),
             None => cash,
@@ -128,6 +125,14 @@ pub fn run_compound_backtest(
                 max_drawdown = dd;
             }
         }
+
+        // 最后一根 K 线不产生信号（没有下一根 K 线可以成交）
+        if index + 1 < lookback || index + 1 >= klines.len() {
+            continue;
+        }
+
+        let window = &klines[index + 1 - lookback..=index];
+        let next_bar = &klines[index + 1];
 
         let Some(signal) = evaluate_with_params(kind, params, window) else {
             continue;
@@ -214,7 +219,7 @@ pub fn run_compound_backtest(
         });
     }
 
-    // 结算剩余仓位
+    // 结算剩余仓位（用最后一根 K 线收盘价）
     if let Some(active) = position.take() {
         let last_bar = klines.last().unwrap();
         let exit_price = last_bar.close;
@@ -241,6 +246,17 @@ pub fn run_compound_backtest(
             fee,
             bars_held: klines.len() - 1 - active.entry_index,
         });
+    }
+
+    // 平仓后再更新一次最终权益的回撤
+    if cash > peak_equity {
+        peak_equity = cash;
+    }
+    if peak_equity > 0.0 {
+        let final_dd = (peak_equity - cash) / peak_equity * 100.0;
+        if final_dd > max_drawdown {
+            max_drawdown = final_dd;
+        }
     }
 
     let final_equity = cash;

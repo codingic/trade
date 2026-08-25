@@ -47,7 +47,9 @@ pub struct CustomBacktestRequest {
 pub struct SweepQuery {
     /// 合约，默认 BTCUSDT
     pub symbol: Option<String>,
-    /// 扫描天数（4h 周期下的自然天），默认 120
+    /// 周期，默认 4h，支持 1h/2h/4h/6h/8h/12h/1d 等
+    pub interval: Option<String>,
+    /// 扫描天数（自然天），默认 120
     pub days: Option<usize>,
     /// 取收益率前 N 名，默认 20
     pub top: Option<usize>,
