@@ -67,5 +67,7 @@ pub struct CompoundBacktestRequest {
     pub capital: Option<f64>,
     pub leverage: Option<f64>,
     pub fee: Option<f64>,
+    /// 止盈百分比（相对于保证金），None 表示不止盈
+    pub take_profit_pct: Option<f64>,
     pub params: Option<HashMap<String, Value>>,
 }

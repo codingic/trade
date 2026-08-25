@@ -20,6 +20,7 @@ use trade_common::indicators::{boll, cci, ema, kdj, ma, macd, rsi};
 #[path = "rsi14_reversal.rs"] mod rsi14_reversal;
 #[path = "rsi7_reversal.rs"] mod rsi7_reversal;
 #[path = "rsi_long_only.rs"] mod rsi_long_only;
+#[path = "rsi_take_profit.rs"] mod rsi_take_profit;
 #[path = "sma_10_30.rs"] mod sma_10_30;
 #[path = "sma_20_60.rs"] mod sma_20_60;
 #[path = "sma_7_25.rs"] mod sma_7_25;
@@ -41,6 +42,7 @@ pub enum StrategyKind {
     CciMidline,
     PriceMaCross,
     DonchianBreakout,
+    RsiTakeProfit,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -101,6 +103,7 @@ pub fn common_strategy_presets() -> Vec<StrategyPreset> {
     result.extend(rsi7_reversal::strategies());
     result.extend(rsi14_midline::strategies());
     result.extend(rsi_long_only::strategies());
+    result.extend(rsi_take_profit::strategies());
     result.extend(macd_12_26_9::strategies());
     result.extend(macd_8_21_5::strategies());
     result.extend(boll_reversion::strategies());
@@ -133,6 +136,7 @@ pub fn evaluate_with_params(kind: StrategyKind, p: &StrategyParams, window: &[Kl
         StrategyKind::CciMidline => evaluate_cci_midline(window, p.period),
         StrategyKind::PriceMaCross => evaluate_price_ma_cross(window, p.period, p.use_ema),
         StrategyKind::DonchianBreakout => evaluate_donchian_breakout(window, p.period),
+        StrategyKind::RsiTakeProfit => evaluate_rsi_take_profit(window, p.period, p.oversold, p.overbought),
     }
 }
 
@@ -183,6 +187,11 @@ pub fn strategy_param_schema(kind: StrategyKind) -> Vec<ParamDef> {
         ],
         StrategyKind::DonchianBreakout => vec![
             ParamDef::int("period", "通道周期", 3, 200, 1),
+        ],
+        StrategyKind::RsiTakeProfit => vec![
+            ParamDef::int("period", "RSI 周期", 2, 100, 1),
+            ParamDef::float("oversold", "开多阈值(RSI上穿)", 0.0, 50.0, 0.1),
+            ParamDef::float("overbought", "开空阈值(RSI上穿)", 50.0, 100.0, 0.1),
         ],
     }
 }
@@ -495,6 +504,27 @@ pub(crate) fn evaluate_donchian_breakout(window: &[Kline], period: usize) -> Opt
     }
 }
 
+/// RSI 带止盈策略：RSI 上穿 long_entry 开多，上穿 short_entry 开空；止盈由回测引擎处理。
+pub(crate) fn evaluate_rsi_take_profit(
+    window: &[Kline],
+    period: usize,
+    long_entry: f64,
+    short_entry: f64,
+) -> Option<&'static str> {
+    let series = rsi(&closes(window), period);
+    let (Some(prev), Some(curr)) = (series[series.len() - 2], series[series.len() - 1]) else {
+        return None;
+    };
+
+    if prev <= long_entry && curr > long_entry {
+        Some("BUY")
+    } else if prev <= short_entry && curr > short_entry {
+        Some("SELL")
+    } else {
+        None
+    }
+}
+
 pub(crate) fn crossover_signal(
     prev_fast: Option<f64>,
     curr_fast: Option<f64>,
@@ -534,6 +564,6 @@ mod tests {
 
     #[test]
     fn common_strategy_catalog_has_21_presets() {
-        assert_eq!(common_strategy_presets().len(), 105);
+        assert_eq!(common_strategy_presets().len(), 108);
     }
 }

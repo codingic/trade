@@ -476,6 +476,7 @@ pub async fn run_compound_backtest_request(request: CompoundBacktestRequest) -> 
     let initial_capital = request.capital.unwrap_or(100.0).max(1.0);
     let leverage = request.leverage.unwrap_or(1.0).max(0.01);
     let fee_rate = request.fee.unwrap_or(0.0004).max(0.0);
+    let take_profit_pct = request.take_profit_pct;
 
     let kind = parse_kind(&request.kind)?;
 
@@ -518,6 +519,7 @@ pub async fn run_compound_backtest_request(request: CompoundBacktestRequest) -> 
         initial_capital,
         leverage,
         fee_rate,
+        take_profit_pct,
     );
 
     // 与 custom backtest 输出结构对齐，前端可用同一套 renderCustomBacktestResult
@@ -599,6 +601,7 @@ fn parse_kind(kind: &str) -> Result<backtest::catalog::StrategyKind> {
         "cciMidline" => Ok(StrategyKind::CciMidline),
         "priceMaCross" => Ok(StrategyKind::PriceMaCross),
         "donchianBreakout" => Ok(StrategyKind::DonchianBreakout),
+        "rsiTakeProfit" => Ok(StrategyKind::RsiTakeProfit),
         other => Err(anyhow!("未知策略 kind: {}", other)),
     }
 }
@@ -636,6 +639,7 @@ fn kind_category(kind: backtest::catalog::StrategyKind) -> &'static str {
         StrategyKind::CciMidline => "CCI中线",
         StrategyKind::PriceMaCross => "价格/MA",
         StrategyKind::DonchianBreakout => "唐奇安突破",
+        StrategyKind::RsiTakeProfit => "RSI止盈",
     }
 }
 
@@ -656,6 +660,7 @@ fn params_desc(kind: backtest::catalog::StrategyKind, p: &StrategyParams) -> Str
         StrategyKind::KdjCross | StrategyKind::CciMidline => format!("p={}", p.period),
         StrategyKind::CciReversal => format!("p={},t={}", p.period, p.threshold),
         StrategyKind::DonchianBreakout => format!("p={}", p.period),
+        StrategyKind::RsiTakeProfit => format!("p={},多={},空={}", p.period, p.oversold, p.overbought),
     }
 }
 

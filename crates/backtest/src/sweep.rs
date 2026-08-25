@@ -92,6 +92,8 @@ impl Position {
 }
 
 /// 复利全仓回测（每次用 95% 可用资金开仓，更贴近「最高收益」语义）
+///
+/// `take_profit_pct`：止盈百分比（相对于保证金），达到后下一根 K 线开盘平仓。None 表示不止盈。
 pub fn run_compound_backtest(
     klines: &[Kline],
     lookback: usize,
@@ -100,6 +102,7 @@ pub fn run_compound_backtest(
     initial_capital: f64,
     leverage: f64,
     fee_rate: f64,
+    take_profit_pct: Option<f64>,
 ) -> CompoundBacktestResult {
     let mut cash = initial_capital;
     let mut position: Option<Position> = None;
@@ -134,7 +137,25 @@ pub fn run_compound_backtest(
         let window = &klines[index + 1 - lookback..=index];
         let next_bar = &klines[index + 1];
 
-        let Some(signal) = evaluate_with_params(kind, params, window) else {
+        // 止盈检查：优先于策略信号，达到目标后下一根开盘平仓
+        let tp_signal: Option<&'static str> = if let (Some(tp_pct), Some(p)) = (take_profit_pct, &position) {
+            let pnl_pct = p.gross_pnl(bar.close) / p.margin * 100.0;
+            if pnl_pct >= tp_pct {
+                Some("EXIT")
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let signal = if tp_signal.is_some() {
+            tp_signal
+        } else {
+            evaluate_with_params(kind, params, window)
+        };
+
+        let Some(signal) = signal else {
             continue;
         };
 
@@ -314,7 +335,7 @@ pub fn run_sweep(
 
     for (kind, grid) in &grids {
         for (name, params, lookback) in grid {
-            let stats = run_compound_backtest(klines, *lookback, *kind, params, initial_capital, leverage, fee_rate);
+            let stats = run_compound_backtest(klines, *lookback, *kind, params, initial_capital, leverage, fee_rate, None);
             if stats.trades.len() >= 3 {
                 results.push(SweepRow {
                     rank: 0,
@@ -356,6 +377,7 @@ fn kind_category(kind: StrategyKind) -> &'static str {
         StrategyKind::CciMidline => "CCI中线",
         StrategyKind::PriceMaCross => "价格/MA",
         StrategyKind::DonchianBreakout => "唐奇安突破",
+        StrategyKind::RsiTakeProfit => "RSI止盈",
     }
 }
 
@@ -529,5 +551,70 @@ fn param_desc(kind: StrategyKind, p: &StrategyParams) -> String {
         StrategyKind::KdjCross | StrategyKind::CciMidline => format!("p={}", p.period),
         StrategyKind::CciReversal => format!("p={},t={}", p.period, p.threshold),
         StrategyKind::DonchianBreakout => format!("p={}", p.period),
+        StrategyKind::RsiTakeProfit => format!("p={},多={},空={}", p.period, p.oversold, p.overbought),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use trade_common::binance::types::Kline;
+
+    use super::*;
+    use crate::catalog::StrategyParams;
+
+    fn sample_bar(open_time: u64, open: f64, close: f64) -> Kline {
+        Kline {
+            open_time,
+            open,
+            high: open.max(close),
+            low: open.min(close),
+            close,
+            volume: 1.0,
+            close_time: open_time + 59_999,
+            quote_volume: close,
+            trades: 1,
+            taker_buy_base: 0.5,
+            taker_buy_quote: close / 2.0,
+        }
+    }
+
+    /// 验证带止盈参数的复利回测能正常运行不 panic
+    #[test]
+    fn compound_backtest_with_take_profit_runs() {
+        let mut klines = Vec::new();
+        // 构造一个有波动的序列：先跌后涨，确保有交易信号
+        for i in 0..60 {
+            let price = if i < 20 {
+                100.0 - i as f64 * 1.5  // 先跌到 70
+            } else {
+                70.0 + (i - 20) as f64 * 1.2  // 再涨到 118
+            };
+            klines.push(sample_bar(i * 60_000, price, price + 0.5));
+        }
+
+        let params = StrategyParams {
+            period: 14,
+            oversold: 30.0,
+            overbought: 70.0,
+            ..Default::default()
+        };
+
+        // 带止盈 10% — 不应 panic
+        let result_with_tp = run_compound_backtest(
+            &klines, 30, StrategyKind::RsiTakeProfit, &params,
+            100.0, 1.0, 0.0004, Some(10.0),
+        );
+        // 不止盈 — 不应 panic
+        let result_no_tp = run_compound_backtest(
+            &klines, 30, StrategyKind::RsiTakeProfit, &params,
+            100.0, 1.0, 0.0004, None,
+        );
+
+        // 两种模式都不应 panic，bars 数应等于输入
+        assert_eq!(result_with_tp.bars, 60);
+        assert_eq!(result_no_tp.bars, 60);
+        // 最终权益应为正数
+        assert!(result_with_tp.final_equity > 0.0);
+        assert!(result_no_tp.final_equity > 0.0);
     }
 }

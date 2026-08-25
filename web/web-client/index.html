@@ -9,10 +9,17 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #0d1117;
+      background: #050810;
+      background-image:
+        radial-gradient(ellipse at 20% 0%, rgba(0, 180, 255, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 100%, rgba(120, 60, 255, 0.08) 0%, transparent 50%),
+        linear-gradient(rgba(0, 180, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 180, 255, 0.03) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
       color: #c9d1d9;
       font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
       padding: 16px;
+      min-height: 100vh;
     }
     .header {
       display: flex;
@@ -21,19 +28,39 @@
       margin-bottom: 12px;
       flex-wrap: wrap;
     }
-    .header h1 { font-size: 18px; font-weight: 600; color: #e6edf3; }
+    .header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+      letter-spacing: 1px;
+    }
     .toolbar { display: flex; gap: 8px; align-items: center; }
     .toolbar select, .toolbar button {
-      background: #161b22;
+      background: rgba(15, 23, 42, 0.8);
       color: #c9d1d9;
-      border: 1px solid #30363d;
+      border: 1px solid rgba(0, 212, 255, 0.25);
       border-radius: 6px;
       padding: 6px 12px;
       font-size: 13px;
       cursor: pointer;
+      backdrop-filter: blur(10px);
+      transition: all 0.2s;
     }
-    .toolbar button:hover { background: #21262d; }
-    .toolbar button.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+    .toolbar button:hover {
+      background: rgba(0, 212, 255, 0.1);
+      border-color: rgba(0, 212, 255, 0.6);
+      box-shadow: 0 0 15px rgba(0, 212, 255, 0.2);
+    }
+    .toolbar button.active {
+      background: linear-gradient(135deg, #00d4ff 0%, #0066ff 100%);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+    }
     /* 指标显隐控制面板 */
     .indicator-panel {
       display: flex;
@@ -42,65 +69,81 @@
       flex-wrap: wrap;
       margin-bottom: 10px;
       padding: 8px 12px;
-      background: #161b22;
-      border: 1px solid #30363d;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(0, 212, 255, 0.2);
       border-radius: 8px;
+      backdrop-filter: blur(10px);
     }
-    .indicator-panel .label { font-size: 12px; color: #8b949e; margin-right: 4px; }
+    .indicator-panel .label { font-size: 12px; color: #00d4ff; margin-right: 4px; font-weight: 600; }
     .indicator-panel .ind-btn {
       padding: 3px 10px;
       font-size: 12px;
       border-radius: 12px;
-      border: 1px solid #30363d;
-      background: #0d1117;
+      border: 1px solid rgba(0, 212, 255, 0.2);
+      background: rgba(15, 23, 42, 0.6);
       color: #8b949e;
       cursor: pointer;
       transition: all 0.15s;
       user-select: none;
     }
+    .indicator-panel .ind-btn:hover { color: #00d4ff; border-color: rgba(0, 212, 255, 0.5); }
     .indicator-panel .ind-btn.on {
-      background: #1f6feb;
-      border-color: #1f6feb;
+      background: linear-gradient(135deg, #00d4ff 0%, #0066ff 100%);
+      border-color: transparent;
       color: #fff;
+      box-shadow: 0 0 12px rgba(0, 212, 255, 0.4);
     }
     #chart {
       width: 100%;
       height: calc(100vh - 130px);
-      border: 1px solid #30363d;
-      border-radius: 8px;
-      background: #0d1117;
+      border: 1px solid rgba(0, 212, 255, 0.25);
+      border-radius: 10px;
+      background: rgba(5, 8, 16, 0.8);
+      box-shadow: 0 0 40px rgba(0, 212, 255, 0.08), inset 0 0 60px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
     }
-    .status { font-size: 12px; color: #8b949e; margin-left: auto; }
+    .status { font-size: 12px; color: #00d4ff; margin-left: auto; }
     /* 数据库查看弹窗 */
     .modal-mask {
       position: fixed; inset: 0;
-      background: rgba(0, 0, 0, 0.6);
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
       display: none;
       align-items: center; justify-content: center;
       z-index: 100;
     }
     .modal-mask.open { display: flex; }
     .modal {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 10px;
+      background: rgba(10, 14, 26, 0.92);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      border-radius: 12px;
       width: min(760px, 92vw);
       max-height: 80vh;
       display: flex; flex-direction: column;
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+      box-shadow: 0 0 60px rgba(0, 212, 255, 0.15), 0 20px 60px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(20px);
     }
     .modal-header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 16px; border-bottom: 1px solid #30363d;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+      background: linear-gradient(90deg, rgba(0, 212, 255, 0.08) 0%, transparent 100%);
     }
-    .modal-header h2 { font-size: 15px; color: #e6edf3; font-weight: 600; }
-    .modal-close { background: none; border: none; color: #8b949e; font-size: 22px; cursor: pointer; line-height: 1; }
-    .modal-close:hover { color: #e6edf3; }
+    .modal-header h2 {
+      font-size: 15px;
+      color: #00d4ff;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-shadow: 0 0 10px rgba(0, 212, 255, 0.4);
+    }
+    .modal-close { background: none; border: none; color: #8b949e; font-size: 22px; cursor: pointer; line-height: 1; transition: color 0.2s; }
+    .modal-close:hover { color: #00d4ff; text-shadow: 0 0 10px rgba(0, 212, 255, 0.6); }
     .modal-body { padding: 12px 16px; overflow: auto; }
     .db-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .db-table th, .db-table td { padding: 7px 12px; text-align: left; border-bottom: 1px solid #21262d; white-space: nowrap; }
-    .db-table th { color: #8b949e; font-weight: 500; position: sticky; top: 0; background: #161b22; }
+    .db-table th, .db-table td { padding: 7px 12px; text-align: left; border-bottom: 1px solid rgba(0, 212, 255, 0.1); white-space: nowrap; }
+    .db-table th { color: #00d4ff; font-weight: 600; position: sticky; top: 0; background: rgba(10, 14, 26, 0.95); }
     .db-table td { color: #c9d1d9; }
+    .db-table tbody tr:hover { background: rgba(0, 212, 255, 0.05); }
     .db-empty { color: #8b949e; font-size: 13px; padding: 12px 0; }
     .strategy-modal {
       width: 100vw;
@@ -122,8 +165,8 @@
       min-height: 0;
     }
     .strategy-form {
-      background: #0d1117;
-      border: 1px solid #30363d;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(0, 212, 255, 0.2);
       border-radius: 10px;
       padding: 14px;
       display: flex;
@@ -131,67 +174,110 @@
       gap: 12px;
       overflow: auto;
       min-height: 0;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 0 30px rgba(0, 212, 255, 0.05);
     }
-    .strategy-form h3, .strategy-result h3 { font-size: 14px; color: #e6edf3; }
+    .strategy-form h3, .strategy-result h3 {
+      font-size: 14px;
+      color: #00d4ff;
+      font-weight: 700;
+      text-shadow: 0 0 8px rgba(0, 212, 255, 0.3);
+    }
     .strategy-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .strategy-field { display: flex; flex-direction: column; gap: 6px; }
     .strategy-field label { font-size: 12px; color: #8b949e; }
     .strategy-field input, .strategy-field select {
-      background: #161b22;
+      background: rgba(5, 8, 16, 0.8);
       color: #c9d1d9;
-      border: 1px solid #30363d;
+      border: 1px solid rgba(0, 212, 255, 0.2);
       border-radius: 6px;
       padding: 7px 10px;
       font-size: 13px;
+      transition: all 0.2s;
+    }
+    .strategy-field input:focus, .strategy-field select:focus {
+      outline: none;
+      border-color: #00d4ff;
+      box-shadow: 0 0 12px rgba(0, 212, 255, 0.3);
     }
     .strategy-actions { display: flex; gap: 8px; }
     .strategy-actions button {
-      background: #1f6feb;
+      background: linear-gradient(135deg, #00d4ff 0%, #0066ff 100%);
       color: #fff;
-      border: 1px solid #1f6feb;
+      border: none;
       border-radius: 6px;
-      padding: 8px 12px;
+      padding: 8px 16px;
       font-size: 13px;
+      font-weight: 600;
       cursor: pointer;
+      box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+      transition: all 0.2s;
+    }
+    .strategy-actions button:hover {
+      box-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+      transform: translateY(-1px);
     }
     .strategy-actions button.secondary {
-      background: #161b22;
+      background: rgba(15, 23, 42, 0.8);
       color: #c9d1d9;
-      border-color: #30363d;
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      box-shadow: none;
     }
     .strategy-result {
-      background: #0d1117;
-      border: 1px solid #30363d;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid rgba(0, 212, 255, 0.15);
       border-radius: 10px;
       padding: 14px;
       min-height: 0;
       height: 100%;
       overflow: auto;
+      backdrop-filter: blur(10px);
     }
     .bt-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
     .bt-card {
-      background: #161b22;
-      border: 1px solid #30363d;
+      background: rgba(5, 8, 16, 0.7);
+      border: 1px solid rgba(0, 212, 255, 0.15);
       border-radius: 8px;
       padding: 10px 12px;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .bt-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 3px; height: 100%;
+      background: linear-gradient(180deg, #00d4ff 0%, #7c3aed 100%);
+    }
+    .bt-card:hover {
+      border-color: rgba(0, 212, 255, 0.4);
+      box-shadow: 0 0 20px rgba(0, 212, 255, 0.1);
     }
     .bt-card .label { display: block; font-size: 11px; color: #8b949e; margin-bottom: 6px; }
-    .bt-card .value { font-size: 18px; color: #e6edf3; font-weight: 600; }
-    .bt-card .value.negative { color: #ff7b72; }
-    .bt-card .value.positive { color: #3fb950; }
+    .bt-card .value { font-size: 18px; color: #e6edf3; font-weight: 700; }
+    .bt-card .value.negative { color: #ff5c7a; text-shadow: 0 0 10px rgba(255, 92, 122, 0.4); }
+    .bt-card .value.positive { color: #00ff88; text-shadow: 0 0 10px rgba(0, 255, 136, 0.4); }
     .bt-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
     .bt-pill {
       font-size: 12px;
       color: #8b949e;
-      background: #161b22;
-      border: 1px solid #30363d;
+      background: rgba(5, 8, 16, 0.7);
+      border: 1px solid rgba(0, 212, 255, 0.15);
       border-radius: 999px;
       padding: 4px 10px;
     }
-    .bt-table-wrap { margin-top: 14px; overflow: auto; }
+    .bt-table-wrap { margin-top: 14px; overflow: auto; border: 1px solid rgba(0, 212, 255, 0.15); border-radius: 8px; }
     .bt-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .bt-table th, .bt-table td { padding: 7px 8px; text-align: left; border-bottom: 1px solid #21262d; white-space: nowrap; }
-    .bt-table th { color: #8b949e; font-weight: 500; }
+    .bt-table th, .bt-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid rgba(0, 212, 255, 0.08); white-space: nowrap; }
+    .bt-table th {
+      color: #00d4ff;
+      font-weight: 600;
+      background: rgba(0, 212, 255, 0.05);
+      position: sticky;
+      top: 0;
+    }
+    .bt-table tbody tr:hover { background: rgba(0, 212, 255, 0.05); }
     .bt-empty { color: #8b949e; font-size: 13px; padding: 14px 0; }
     .bt-section + .bt-section {
       margin-top: 18px;
@@ -218,8 +304,9 @@
     .catalog-table-wrap {
       margin-top: 12px;
       overflow: auto;
-      border: 1px solid #30363d;
-      border-radius: 8px;
+      border: 1px solid rgba(0, 212, 255, 0.2);
+      border-radius: 10px;
+      box-shadow: 0 0 30px rgba(0, 212, 255, 0.05);
     }
     .catalog-table {
       width: 100%;
@@ -227,24 +314,26 @@
       font-size: 12px;
     }
     .catalog-table th, .catalog-table td {
-      padding: 8px 10px;
+      padding: 10px 12px;
       text-align: left;
-      border-bottom: 1px solid #21262d;
+      border-bottom: 1px solid rgba(0, 212, 255, 0.08);
       vertical-align: top;
       white-space: nowrap;
     }
     .catalog-table th {
-      color: #8b949e;
-      font-weight: 500;
+      color: #00d4ff;
+      font-weight: 700;
       position: sticky;
       top: 0;
-      background: #161b22;
+      background: rgba(10, 14, 26, 0.98);
+      letter-spacing: 0.5px;
     }
-    .catalog-table tbody tr:hover { background: #161b22; }
+    .catalog-table tbody tr { transition: background 0.15s; }
+    .catalog-table tbody tr:hover { background: rgba(0, 212, 255, 0.06); }
     .catalog-name { color: #e6edf3; font-weight: 600; }
     .catalog-desc { color: #8b949e; font-size: 11px; margin-top: 4px; white-space: normal; }
-    .catalog-positive { color: #3fb950; }
-    .catalog-negative { color: #ff7b72; }
+    .catalog-positive { color: #00ff88; font-weight: 600; text-shadow: 0 0 8px rgba(0, 255, 136, 0.3); }
+    .catalog-negative { color: #ff5c7a; font-weight: 600; text-shadow: 0 0 8px rgba(255, 92, 122, 0.3); }
     @media (max-width: 980px) {
       .strategy-layout { grid-template-columns: 1fr; }
       .bt-summary { grid-template-columns: 1fr 1fr; }
@@ -256,39 +345,67 @@
     /* Top10 精选策略卡片 */
     .top10-badge {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 28px; height: 28px; border-radius: 50%;
-      font-weight: 700; font-size: 13px;
-      background: #21262d; color: #8b949e;
+      width: 32px; height: 32px; border-radius: 8px;
+      font-weight: 700; font-size: 14px;
+      background: rgba(0, 212, 255, 0.1); color: #00d4ff;
+      border: 1px solid rgba(0, 212, 255, 0.3);
       flex-shrink: 0;
+      box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
     }
-    .top10-badge.gold { background: linear-gradient(135deg, #f0b429, #da8b00); color: #0d1117; }
-    .top10-badge.silver { background: linear-gradient(135deg, #8b949e, #6e7681); color: #0d1117; }
-    .top10-badge.bronze { background: linear-gradient(135deg, #bc6c25, #8a5016); color: #fff; }
+    .top10-badge.gold { background: linear-gradient(135deg, #ffd700, #ff8c00); color: #000; border-color: transparent; box-shadow: 0 0 20px rgba(255, 215, 0, 0.4); }
+    .top10-badge.silver { background: linear-gradient(135deg, #c0c0c0, #808080); color: #000; border-color: transparent; box-shadow: 0 0 15px rgba(192, 192, 192, 0.3); }
+    .top10-badge.bronze { background: linear-gradient(135deg, #cd7f32, #8b4513); color: #fff; border-color: transparent; box-shadow: 0 0 15px rgba(205, 127, 50, 0.3); }
     .top10-card {
       display: flex; align-items: center; gap: 14px;
-      background: #0d1117; border: 1px solid #21262d; border-radius: 8px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(0, 212, 255, 0.15);
+      border-radius: 10px;
       padding: 14px 16px; margin-bottom: 8px;
-      cursor: pointer; transition: all .15s;
+      cursor: pointer; transition: all .2s;
+      backdrop-filter: blur(10px);
+      position: relative;
+      overflow: hidden;
     }
-    .top10-card:hover { border-color: #1f6feb; background: #161b22; transform: translateX(2px); }
+    .top10-card::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 0;
+      width: 3px; height: 100%;
+      background: linear-gradient(180deg, #00d4ff 0%, #7c3aed 100%);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .top10-card:hover {
+      border-color: rgba(0, 212, 255, 0.5);
+      background: rgba(0, 212, 255, 0.05);
+      transform: translateX(4px);
+      box-shadow: 0 0 30px rgba(0, 212, 255, 0.15);
+    }
+    .top10-card:hover::before { opacity: 1; }
     .top10-info { flex: 1; min-width: 0; }
     .top10-name { color: #e6edf3; font-size: 14px; font-weight: 600; }
     .top10-desc { color: #8b949e; font-size: 11px; margin-top: 3px; font-family: monospace; }
     .top10-stats { display: flex; gap: 12px; align-items: center; flex-shrink: 0; }
     .top10-stat { text-align: right; }
-    .top10-stat .val { font-size: 16px; font-weight: 700; color: #3fb950; font-family: monospace; }
+    .top10-stat .val { font-size: 16px; font-weight: 700; color: #00ff88; font-family: monospace; text-shadow: 0 0 8px rgba(0, 255, 136, 0.3); }
     .top10-stat .lbl { font-size: 10px; color: #484f58; margin-top: 1px; }
-    .top10-stat .val.neg { color: #f85149; }
+    .top10-stat .val.neg { color: #ff5c7a; text-shadow: 0 0 8px rgba(255, 92, 122, 0.3); }
     .top10-run {
-      background: #238636; color: #fff; border: none; border-radius: 6px;
+      background: linear-gradient(135deg, #00d4ff 0%, #0066ff 100%);
+      color: #fff; border: none; border-radius: 6px;
       padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
       white-space: nowrap; flex-shrink: 0;
+      box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+      transition: all 0.2s;
     }
-    .top10-run:hover { background: #2ea043; }
+    .top10-run:hover { box-shadow: 0 0 25px rgba(0, 212, 255, 0.5); transform: translateY(-1px); }
     .top10-header-info {
-      background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(0, 212, 255, 0.2);
+      border-radius: 10px;
       padding: 12px 16px; margin-bottom: 14px; font-size: 12px; color: #8b949e;
       display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+      backdrop-filter: blur(10px);
     }
     .top10-header-info b { color: #58a6ff; }
   </style>
@@ -353,23 +470,23 @@
 
   <!-- 策略目录弹窗 -->
   <div class="modal-mask" id="catalogModal">
-    <div class="modal" style="width: min(1100px, 95vw); max-height: 85vh;">
+    <div class="modal" style="width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; border-radius: 0; margin: 0;">
       <div class="modal-header">
-        <h2>105 个内置策略目录</h2>
+        <h2>策略目录</h2>
         <button class="modal-close" id="catalogClose">&times;</button>
       </div>
-      <div class="modal-body" id="catalogBody">加载中...</div>
+      <div class="modal-body" id="catalogBody" style="max-height: calc(100vh - 60px);">加载中...</div>
     </div>
   </div>
 
   <!-- Top10 精选策略弹窗 -->
   <div class="modal-mask" id="top10Modal">
-    <div class="modal" style="width: min(1100px, 95vw); max-height: 85vh;">
+    <div class="modal" style="width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; border-radius: 0; margin: 0;">
       <div class="modal-header">
-        <h2>🏆 4小时周期 Top10 精选策略</h2>
+        <h2>🏆 Top10 精选策略</h2>
         <button class="modal-close" id="top10Close">&times;</button>
       </div>
-      <div class="modal-body" id="top10Body"></div>
+      <div class="modal-body" id="top10Body" style="max-height: calc(100vh - 60px);"></div>
     </div>
   </div>
 
@@ -864,14 +981,14 @@
         const fieldType = String(field.type || '').toLowerCase();
         if (fieldType === 'bool') {
           formHtml += `
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
-              <input type="checkbox" id="sp_${key}" ${val ? 'checked' : ''} style="width:auto; accent-color:#238636;">
-              <label for="sp_${key}" style="color:#c9d1d9; font-size:13px; cursor:pointer;">${label}</label>
+            <div style="flex:0 0 160px; display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="sp_${key}" ${val ? 'checked' : ''} style="width:auto; accent-color:#00d4ff;">
+              <label for="sp_${key}" style="color:#c9d1d9; font-size:12px; cursor:pointer;">${label}</label>
             </div>`;
         } else {
           formHtml += `
-            <div style="margin-bottom:10px;">
-              <label for="sp_${key}" style="color:#8b949e; font-size:12px; display:block; margin-bottom:3px;">${label} <span style="color:#484f58;">(${field.min}~${field.max})</span></label>
+            <div style="flex:0 0 160px;">
+              <label for="sp_${key}" style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">${label}</label>
               <input id="sp_${key}" type="number" value="${val}" min="${field.min}" max="${field.max}" step="${field.step}" style="${inputStyle}">
             </div>`;
         }
@@ -891,12 +1008,12 @@
       let settingsHtml;
       if (isCompound) {
         settingsHtml = `
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-            <div>
+          <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+            <div style="flex:0 0 140px;">
               <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">合约</label>
               <input id="sp_symbol" value="${symVal}" style="${inputStyle}">
             </div>
-            <div>
+            <div style="flex:0 0 120px;">
               <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">周期</label>
               <select id="sp_interval" style="${selectStyle}">
                 <option value="1h" ${intVal==='1h'?'selected':''}>1h</option>
@@ -908,36 +1025,35 @@
                 <option value="1d" ${intVal==='1d'?'selected':''}>1d</option>
               </select>
             </div>
-            <div>
+            <div style="flex:0 0 120px;">
               <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">初始资金(U)</label>
               <input id="sp_capital" type="number" value="${capVal}" min="1" step="10" style="${inputStyle}">
             </div>
-            <div>
+            <div style="flex:0 0 120px;">
               <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">杠杆倍数</label>
               <input id="sp_leverage" type="number" value="${levVal}" min="0.1" step="0.1" style="${inputStyle}">
             </div>
-            <div>
+            <div style="flex:0 0 120px;">
               <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">手续费率</label>
               <input id="sp_fee" type="number" value="${feeVal}" min="0" step="0.0001" style="${inputStyle}">
             </div>
-            <div>
+            <div style="flex:0 0 120px;">
               <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">回测天数</label>
               <input id="sp_days" type="number" value="${daysVal}" min="1" step="10" style="${inputStyle}">
             </div>
-            <div style="grid-column:span 2;">
-              <div style="color:#3fb950; font-size:11px; background:#0d1117; border:1px solid #23863644; border-radius:4px; padding:6px 8px;">
-                💡 复利模式：每次用 95% 可用资金开仓，自动滚动
-              </div>
+            <div style="flex:0 0 140px;">
+              <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">止盈%(0=不止盈)</label>
+              <input id="sp_take_profit" type="number" value="10" min="0" step="1" style="${inputStyle}">
             </div>
           </div>`;
       } else {
         settingsHtml = `
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-            <div>
+          <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end;">
+            <div style="flex:0 0 140px;">
               <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">合约</label>
               <input id="sp_symbol" value="${symVal}" style="${inputStyle}">
             </div>
-            <div>
+            <div style="flex:0 0 120px;">
               <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">周期</label>
               <select id="sp_interval" style="${selectStyle}">
                 <option value="1m" ${intVal==='1m'?'selected':''}>1m</option>
@@ -947,23 +1063,23 @@
                 <option value="4h" ${intVal==='4h'?'selected':''}>4h</option>
               </select>
             </div>
-            <div>
+            <div style="flex:0 0 120px;">
               <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">资金(U)</label>
               <input id="sp_capital" type="number" value="${capVal}" min="1" step="10" style="${inputStyle}">
             </div>
-            <div>
+            <div style="flex:0 0 120px;">
               <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">保证金(U)</label>
               <input id="sp_quantity" type="number" value="${qtyVal}" min="1" step="1" style="${inputStyle}">
             </div>
-            <div>
+            <div style="flex:0 0 120px;">
               <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">杠杆倍数</label>
               <input id="sp_leverage" type="number" value="${levVal}" min="1" step="1" style="${inputStyle}">
             </div>
-            <div>
+            <div style="flex:0 0 120px;">
               <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">手续费率</label>
               <input id="sp_fee" type="number" value="${feeVal}" min="0" step="0.0001" style="${inputStyle}">
             </div>
-            <div style="grid-column:span 2;">
+            <div style="flex:0 0 160px;">
               <label style="color:#8b949e; font-size:11px; display:block; margin-bottom:3px;">K线数量(0=全部)</label>
               <input id="sp_limit" type="number" value="${limVal}" min="0" step="500" style="${inputStyle}">
             </div>
@@ -974,25 +1090,30 @@
       const runBtnText = isCompound ? '▶ 运行复利回测' : '▶ 运行回测';
 
       catalogBody.innerHTML = `
-        <div style="display:flex; gap:16px; min-height:400px;">
-          <div style="flex:0 0 340px; background:#0d1117; border:1px solid #21262d; border-radius:8px; padding:14px; overflow-y:auto; max-height:65vh;">
-            <div style="margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-              <button id="spBack" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px;">← 返回</button>
-              <span style="color:#8b949e; font-size:12px;">${editorTitle}</span>
+        <div style="display:flex; flex-direction:column; gap:12px; min-height: calc(100vh - 80px);">
+          <!-- 顶部参数面板 -->
+          <div style="background:rgba(15,23,42,0.8); border:1px solid rgba(0,212,255,0.25); border-radius:10px; padding:12px 16px; backdrop-filter:blur(10px); box-shadow:0 0 30px rgba(0,212,255,0.08);">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:12px; flex-wrap:wrap;">
+              <div style="display:flex; align-items:center; gap:12px;">
+                <button id="spBack" style="background:rgba(0,212,255,0.1); color:#00d4ff; border:1px solid rgba(0,212,255,0.3); border-radius:6px; padding:5px 12px; cursor:pointer; font-size:12px; font-weight:600; transition:all 0.2s;">← 返回</button>
+                <div>
+                  <h3 style="color:#00d4ff; font-size:15px; margin:0; font-weight:700; text-shadow:0 0 10px rgba(0,212,255,0.3);">${strategy.name}</h3>
+                  <div style="color:#8b949e; font-size:11px; margin-top:2px;">${strategy.description} · ${strategy.id || strategy.kind} · ${strategy.category}</div>
+                </div>
+              </div>
+              <button id="spRun" style="background:linear-gradient(135deg,#00d4ff 0%,#0066ff 100%); color:#fff; border:none; border-radius:6px; padding:9px 24px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 0 20px rgba(0,212,255,0.4); transition:all 0.2s; white-space:nowrap;">${runBtnText}</button>
             </div>
-            <h3 style="color:#e6edf3; font-size:15px; margin:0 0 4px 0;">${strategy.name}</h3>
-            <div style="color:#8b949e; font-size:12px; margin-bottom:12px;">${strategy.description}</div>
-            <div style="color:#484f58; font-size:10px; font-family:monospace; margin-bottom:12px;">${strategy.id || strategy.kind} · ${strategy.category}</div>
-            <hr style="border:none; border-top:1px solid #21262d; margin:10px 0;">
-            <div style="color:#58a6ff; font-size:12px; font-weight:600; margin-bottom:8px;">策略参数</div>
-            ${formHtml}
-            <hr style="border:none; border-top:1px solid #21262d; margin:10px 0;">
-            <div style="color:#58a6ff; font-size:12px; font-weight:600; margin-bottom:8px;">回测设置</div>
-            ${settingsHtml}
-            <button id="spRun" style="width:100%; margin-top:14px; background:#238636; color:#fff; border:none; border-radius:6px; padding:9px; font-size:13px; font-weight:600; cursor:pointer;">${runBtnText}</button>
+            <div style="display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end;">
+              <div style="color:#00d4ff; font-size:11px; font-weight:700; align-self:center; letter-spacing:0.5px;">⚙ 策略参数</div>
+              ${formHtml}
+              <div style="width:1px; height:28px; background:rgba(0,212,255,0.2); align-self:center;"></div>
+              <div style="color:#7c3aed; font-size:11px; font-weight:700; align-self:center; letter-spacing:0.5px;">📊 回测设置</div>
+              ${settingsHtml}
+            </div>
           </div>
-          <div id="spResult" style="flex:1; overflow-y:auto; max-height:65vh;">
-            <div class="bt-empty">在左侧调整参数后点击「运行回测」查看结果。</div>
+          <!-- 下方结果区（全屏宽度） -->
+          <div id="spResult" style="flex:1; overflow-y:auto; min-height:300px;">
+            <div class="bt-empty" style="padding:40px 0;">在上方调整参数后点击「运行回测」查看结果。</div>
           </div>
         </div>`;
 
@@ -1045,6 +1166,7 @@
           capital: parseFloat(document.getElementById('sp_capital').value) || 100,
           leverage: parseFloat(document.getElementById('sp_leverage').value) || 1,
           fee: parseFloat(document.getElementById('sp_fee').value) || 0.0004,
+          take_profit_pct: (() => { const el = document.getElementById('sp_take_profit'); return el && parseFloat(el.value) > 0 ? parseFloat(el.value) : null; })(),
           params: params,
         };
       } else {
@@ -1132,9 +1254,7 @@
         return;
       }
 
-      // 添加K线图容器
-      html += '<div id="btChart" style="width:100%; height:320px; margin:10px 0; background:#0d1117; border:1px solid #30363d; border-radius:6px;"></div>';
-
+      // 交易记录表格放在上面
       html += '<div class="bt-table-wrap"><table class="bt-table"><thead><tr><th>方向</th><th>入场时间</th><th>入场价</th><th>出场时间</th><th>出场价</th><th>净收益</th><th>手续费</th><th>持有K数</th></tr></thead><tbody>';
       for (const trade of trades) {
         const pnlClass = Number(trade.netPnl) >= 0 ? 'positive' : 'negative';
@@ -1150,6 +1270,9 @@
         </tr>`;
       }
       html += '</tbody></table></div>';
+
+      // K线图放在最下方，全屏高度
+      html += '<div id="btChart" style="width:100%; height:calc(100vh - 120px); margin:14px 0 0 0; background:#0d1117; border:1px solid #30363d; border-radius:6px;"></div>';
       resultEl.innerHTML = html;
 
       // 渲染K线图和买卖点
@@ -1166,34 +1289,58 @@
 
         const btChart = echarts.init(chartDom, 'dark');
 
-        // 构建买卖点标记数据
-        const buyMarkers = [];
-        const sellMarkers = [];
+        // 计算K线价格范围，用于限制竖线高度
+        let priceMin = Infinity, priceMax = -Infinity;
+        for (const k of data.candles) {
+          if (k[2] < priceMin) priceMin = k[2];
+          if (k[3] > priceMax) priceMax = k[3];
+        }
+        const yPad = (priceMax - priceMin) * 0.05;
+        const yMin = priceMin - yPad;
+        const yMax = priceMax + yPad;
+
+        // 构建买卖点竖线标记数据（两点定义，用coord指定坐标，限制高度在K线范围内）
+        const tradeLines = [];
 
         for (const trade of trades) {
-          // 找到入场时间对应的K线索引
+          // 入场竖线
           const entryIdx = data.times.findIndex(t => t >= trade.entryTime);
           if (entryIdx >= 0) {
-            buyMarkers.push({
-              coord: [entryIdx, trade.entryPrice],
-              value: '买',
-              itemStyle: { color: '#3fb950' },
-              symbol: 'triangle',
-              symbolSize: 14,
-              symbolRotate: 0,
-            });
+            const lineColor = trade.side === 'LONG' ? '#00ff88' : '#ff5c7a';
+            tradeLines.push([
+              {
+                coord: [entryIdx, yMin],
+                lineStyle: { color: lineColor, type: 'dashed', width: 1.5 },
+                label: {
+                  show: true,
+                  position: 'end',
+                  formatter: trade.side === 'LONG' ? '买' : '卖',
+                  color: lineColor,
+                  fontSize: 11,
+                  fontWeight: 'bold',
+                },
+              },
+              { coord: [entryIdx, priceMax] },
+            ]);
           }
-          // 找到出场时间对应的K线索引
+          // 出场竖线
           const exitIdx = data.times.findIndex(t => t >= trade.exitTime);
           if (exitIdx >= 0) {
-            sellMarkers.push({
-              coord: [exitIdx, trade.exitPrice],
-              value: '卖',
-              itemStyle: { color: '#f85149' },
-              symbol: 'triangle',
-              symbolSize: 14,
-              symbolRotate: 180,
-            });
+            tradeLines.push([
+              {
+                coord: [exitIdx, yMin],
+                lineStyle: { color: '#8b949e', type: 'dashed', width: 1.5 },
+                label: {
+                  show: true,
+                  position: 'end',
+                  formatter: '平',
+                  color: '#8b949e',
+                  fontSize: 11,
+                  fontWeight: 'bold',
+                },
+              },
+              { coord: [exitIdx, priceMax] },
+            ]);
           }
         }
 
@@ -1220,6 +1367,8 @@
           },
           yAxis: {
             scale: true,
+            min: yMin,
+            max: yMax,
             axisLine: { lineStyle: { color: '#30363d' } },
             axisLabel: { color: '#8b949e', fontSize: 10 },
             splitLine: { lineStyle: { color: '#21262d' } },
@@ -1250,21 +1399,15 @@
               type: 'candlestick',
               data: data.candles,
               itemStyle: {
-                color: '#ef232a',
-                color0: '#14b143',
-                borderColor: '#ef232a',
-                borderColor0: '#14b143',
+                color: '#3fb950',
+                color0: '#f85149',
+                borderColor: '#3fb950',
+                borderColor0: '#f85149',
               },
-              markPoint: {
-                symbol: 'triangle',
-                symbolSize: 14,
-                label: {
-                  show: true,
-                  color: '#fff',
-                  fontSize: 9,
-                  fontWeight: 'bold',
-                },
-                data: [...buyMarkers, ...sellMarkers],
+              markLine: {
+                symbol: 'none',
+                silent: false,
+                data: tradeLines,
               },
             },
           ],
@@ -1623,29 +1766,31 @@
                 <div class="lbl">回撤</div>
               </div>
             </div>
-            <button class="top10-run" data-rank="${s.rank}">▶ 回测</button>
+            <div style="display:flex; gap:6px; flex-shrink:0;">
+              <button class="top10-run" data-rank="${s.rank}">▶ 打开</button>
+            </div>
           </div>
         `;
       }
 
       html += `
         <div style="margin-top:14px; padding:10px 14px; background:#161b22; border:1px solid #30363d; border-radius:8px; font-size:11px; color:#8b949e;">
-          ⚠️ 以上收益率基于历史数据回测（复利全仓模式），不构成投资建议。点击「回测」按钮可使用该策略参数在当前选择的合约/周期上运行回测。
+          ⚠️ 以上收益率基于历史数据回测（复利全仓模式），不构成投资建议。点击卡片或「▶ 打开」进入策略编辑界面，可调整参数后运行回测。
         </div>
       `;
 
       top10Body.innerHTML = html;
 
-      // Bind card click → open strategy editor with preset params
+      // 卡片点击 → 进入策略编辑界面
       top10Body.querySelectorAll('.top10-card').forEach(card => {
         card.addEventListener('click', (e) => {
-          if (e.target.classList.contains('top10-run')) return;
+          if (e.target.tagName === 'BUTTON') return;
           const rank = parseInt(card.dataset.rank);
           const s = TOP10_STRATEGIES.find(x => x.rank === rank);
-          if (s) runTop10Backtest(s, false);
+          if (s) runTop10Backtest(s, true);
         });
       });
-      // Bind run button
+      // 打开按钮 → 进入策略编辑界面
       top10Body.querySelectorAll('.top10-run').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -1671,6 +1816,7 @@
         'cciMidline': 'cci20_midline',
         'priceMaCross': 'price_ma20',
         'donchianBreakout': 'donchian20',
+        'rsiTakeProfit': 'rsi14_tp_20_90',
       };
       return map[kind] || 'sma_7_25';
     }
@@ -1730,6 +1876,12 @@
           ];
         case 'donchianBreakout':
           return [{ key: 'period', label: '通道周期', type: 'int', min: 3, max: 200, step: 1 }];
+        case 'rsiTakeProfit':
+          return [
+            { key: 'period', label: 'RSI 周期', type: 'int', min: 2, max: 100, step: 1 },
+            { key: 'oversold', label: '开多阈值(RSI上穿)', type: 'float', min: 0, max: 50, step: 0.1 },
+            { key: 'overbought', label: '开空阈值(RSI上穿)', type: 'float', min: 50, max: 100, step: 0.1 },
+          ];
         default:
           return [];
       }
@@ -1740,7 +1892,7 @@
         'maCross': '均线交叉', 'rsiReversal': 'RSI反转', 'rsiMidline': 'RSI中线',
         'rsiLongOnly': 'RSI做多', 'macdCross': 'MACD', 'bollReversion': '布林回归', 'bollBreakout': '布林突破',
         'kdjCross': 'KDJ', 'cciReversal': 'CCI反转', 'cciMidline': 'CCI中线',
-        'priceMaCross': '价格/MA', 'donchianBreakout': '唐奇安突破',
+        'priceMaCross': '价格/MA', 'donchianBreakout': '唐奇安突破', 'rsiTakeProfit': 'RSI止盈',
       };
       return map[kind] || '其他';
     }
@@ -1768,6 +1920,12 @@
       // Close top10 modal, open catalog modal with the strategy editor
       closeTop10Modal();
 
+      // 让 catalogModal 全屏（Top10 场景）
+      const catalogInner = catalogModal.querySelector('.modal');
+      const origStyle = catalogInner.style.cssText;
+      catalogInner.style.cssText = 'width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; border-radius: 0; margin: 0;';
+      const restoreCatalog = () => { catalogInner.style.cssText = origStyle; };
+
       if (showEditor) {
         // Show compound-mode parameter editor
         catalogModal.classList.add('open');
@@ -1775,6 +1933,7 @@
           compound: true,
           defaultDays: 120,
           backAction: () => {
+            restoreCatalog();
             closeCatalogModal();
             openTop10Modal();
           },
@@ -1783,8 +1942,8 @@
         // Run directly without showing editor — use compound backtest (same as sweep)
         catalogModal.classList.add('open');
         catalogBody.innerHTML = `
-          <div style="display:flex; gap:16px; min-height:400px;">
-            <div style="flex:0 0 340px; background:#0d1117; border:1px solid #21262d; border-radius:8px; padding:14px;">
+          <div style="display:flex; gap:16px; min-height:400px; height: calc(100vh - 100px);">
+            <div style="flex:0 0 340px; background:#0d1117; border:1px solid #21262d; border-radius:8px; padding:14px; overflow-y:auto;">
               <div style="margin-bottom:12px; display:flex; align-items:center; gap:8px;">
                 <button id="spBack2" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px;">← 返回</button>
                 <span style="color:#8b949e; font-size:12px;">Top10 精选 #${s.rank}</span>
@@ -1794,12 +1953,13 @@
               <div style="color:#8b949e; font-size:11px; margin-bottom:8px; font-family:monospace;">BTCUSDT · 4h · 120天 · 复利全仓</div>
               <div style="color:#3fb950; font-size:13px; font-weight:600; margin-bottom:8px;">复利回测中...</div>
             </div>
-            <div id="spResult" style="flex:1; overflow-y:auto; max-height:65vh;">
+            <div id="spResult" style="flex:1; overflow-y:auto;">
               <div class="bt-empty">正在运行复利回测，请稍候...</div>
             </div>
           </div>
         `;
         document.getElementById('spBack2').addEventListener('click', () => {
+          restoreCatalog();
           closeCatalogModal();
           openTop10Modal();
         });
