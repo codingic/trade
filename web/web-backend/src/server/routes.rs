@@ -6,7 +6,9 @@ use tower_http::services::ServeDir;
 use super::handlers::{
     handle_backtest,
     handle_backtest_catalog,
+    handle_backtest_compound,
     handle_backtest_custom,
+    handle_backtest_sweep,
     handle_db_overview,
     handle_klines,
     handle_strategies,
@@ -29,6 +31,8 @@ pub fn build_router() -> Router {
         .route("/api/backtest", post(handle_backtest))
         .route("/api/backtest/catalog", post(handle_backtest_catalog))
         .route("/api/backtest/custom", post(handle_backtest_custom))
+        .route("/api/backtest/sweep", get(handle_backtest_sweep))
+        .route("/api/backtest/compound", post(handle_backtest_compound))
         .fallback_service(ServeDir::new(static_dir))
         .layer(cors)
 }

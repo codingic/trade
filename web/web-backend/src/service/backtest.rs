@@ -2,11 +2,12 @@ use anyhow::{anyhow, Context, Result};
 use backtest::catalog::{common_strategy_presets, strategy_param_schema, StrategyParams};
 use backtest::config::BacktestConfig;
 use backtest::engine;
+use backtest::sweep::run_sweep as run_sweep_lib;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use trade_common::storage;
 
-use crate::server::types::{BacktestRequest, CustomBacktestRequest};
+use crate::server::types::{BacktestRequest, CompoundBacktestRequest, CustomBacktestRequest, SweepQuery};
 
 /// 返回内置策略目录（元信息 + 参数 schema，无需回测、无需数据库）
 pub fn list_strategies() -> Result<Value> {
@@ -462,4 +463,246 @@ fn validate_basic(config: &BacktestConfig) -> Result<()> {
         return Err(anyhow!("手续费不能为负"));
     }
     Ok(())
+}
+
+/// 用与 sweep 完全相同的复利引擎，对指定策略参数组合跑一次回测。
+///
+/// 数据窗口由 `days` + `interval` 决定：先读取该周期全部 K 线，再取最近 `days` 天的根数。
+pub async fn run_compound_backtest_request(request: CompoundBacktestRequest) -> Result<Value> {
+    let symbol = request.symbol.unwrap_or_else(|| "BTCUSDT".to_string());
+    let interval = request.interval.unwrap_or_else(|| "4h".to_string());
+    let days = request.days.unwrap_or(120).max(1);
+    let lookback = request.lookback.unwrap_or(0);
+    let initial_capital = request.capital.unwrap_or(100.0).max(1.0);
+    let leverage = request.leverage.unwrap_or(1.0).max(0.01);
+    let fee_rate = request.fee.unwrap_or(0.0004).max(0.0);
+
+    let kind = parse_kind(&request.kind)?;
+
+    let conn = storage::open(storage::DEFAULT_DB_PATH)?;
+    let mut klines = storage::klines(&conn, &symbol, &interval).with_context(|| {
+        format!("读取历史数据失败: {} {}", symbol, interval)
+    })?;
+
+    if klines.is_empty() {
+        return Err(anyhow!(
+            "数据库里没有 {} {} 的历史数据，请先运行 `cargo run -p collector -- backfill 120`",
+            symbol, interval,
+        ));
+    }
+
+    // 按 interval 计算每天根数，然后切片到最近 days 天
+    let bars_per_day = bars_per_day_for_interval(&interval);
+    let take = days.saturating_mul(bars_per_day);
+    if klines.len() > take {
+        klines = klines.split_off(klines.len() - take);
+    }
+
+    let mut params = StrategyParams::default();
+    if let Some(overrides) = &request.params {
+        apply_json_params(&mut params, overrides);
+    }
+
+    // lookback 为 0 时，用参数所需最小 lookback + 5 的缓冲
+    let effective_lookback = if lookback == 0 {
+        required_lookback(kind, &params) + 5
+    } else {
+        lookback
+    };
+
+    let result = backtest::sweep::run_compound_backtest(
+        &klines,
+        effective_lookback,
+        kind,
+        &params,
+        initial_capital,
+        leverage,
+        fee_rate,
+    );
+
+    // 与 custom backtest 输出结构对齐，前端可用同一套 renderCustomBacktestResult
+    let recent_trades: Vec<Value> = result
+        .trades
+        .iter()
+        .rev()
+        .take(20)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .map(|trade| {
+            json!({
+                "side": trade.side,
+                "entryTime": trade.entry_time,
+                "entryPrice": trade.entry_price,
+                "exitTime": trade.exit_time,
+                "exitPrice": trade.exit_price,
+                "grossPnl": trade.gross_pnl,
+                "netPnl": trade.net_pnl,
+                "fee": trade.fee,
+                "barsHeld": trade.bars_held,
+            })
+        })
+        .collect();
+
+    Ok(json!({
+        "strategy": {
+            "id": request.kind,
+            "name": format!("{} ({})", request.kind, params_desc(kind, &params)),
+            "category": kind_category(kind),
+            "description": params_desc(kind, &params),
+            "kind": request.kind,
+            "params": params,
+        },
+        "parameters": {
+            "symbol": symbol,
+            "interval": interval,
+            "capital": initial_capital,
+            "quantity": initial_capital * 0.95,
+            "marginPerTrade": initial_capital * 0.95,
+            "leverage": leverage,
+            "notionalPerTrade": initial_capital * 0.95 * leverage,
+            "feeRate": fee_rate,
+            "lookback": effective_lookback,
+            "limit": take,
+            "days": days,
+        },
+        "summary": {
+            "bars": result.bars,
+            "firstOpenTime": result.first_open_time,
+            "lastCloseTime": result.last_close_time,
+            "tradeCount": result.trades.len(),
+            "winCount": result.win_count,
+            "lossCount": result.loss_count,
+            "winRatePct": result.win_rate_pct,
+            "totalFees": result.total_fees,
+            "netProfit": result.net_profit,
+            "finalEquity": result.final_equity,
+            "returnPct": result.return_pct,
+            "maxDrawdownPct": result.max_drawdown_pct,
+        },
+        "recentTrades": recent_trades,
+    }))
+}
+
+fn parse_kind(kind: &str) -> Result<backtest::catalog::StrategyKind> {
+    use backtest::catalog::StrategyKind;
+    match kind {
+        "maCross" => Ok(StrategyKind::MaCross),
+        "rsiReversal" => Ok(StrategyKind::RsiReversal),
+        "rsiMidline" => Ok(StrategyKind::RsiMidline),
+        "rsiLongOnly" => Ok(StrategyKind::RsiLongOnly),
+        "macdCross" => Ok(StrategyKind::MacdCross),
+        "bollReversion" => Ok(StrategyKind::BollReversion),
+        "bollBreakout" => Ok(StrategyKind::BollBreakout),
+        "kdjCross" => Ok(StrategyKind::KdjCross),
+        "cciReversal" => Ok(StrategyKind::CciReversal),
+        "cciMidline" => Ok(StrategyKind::CciMidline),
+        "priceMaCross" => Ok(StrategyKind::PriceMaCross),
+        "donchianBreakout" => Ok(StrategyKind::DonchianBreakout),
+        other => Err(anyhow!("未知策略 kind: {}", other)),
+    }
+}
+
+fn bars_per_day_for_interval(interval: &str) -> usize {
+    match interval {
+        "1m" => 60 * 24,
+        "3m" => 20 * 24,
+        "5m" => 12 * 24,
+        "15m" => 4 * 24,
+        "30m" => 2 * 24,
+        "1h" => 24,
+        "2h" => 12,
+        "4h" => 6,
+        "6h" => 4,
+        "8h" => 3,
+        "12h" => 2,
+        "1d" => 1,
+        _ => 6, // 默认按 4h 处理
+    }
+}
+
+fn kind_category(kind: backtest::catalog::StrategyKind) -> &'static str {
+    use backtest::catalog::StrategyKind;
+    match kind {
+        StrategyKind::MaCross => "均线交叉",
+        StrategyKind::RsiReversal => "RSI反转",
+        StrategyKind::RsiMidline => "RSI中线",
+        StrategyKind::RsiLongOnly => "RSI做多",
+        StrategyKind::MacdCross => "MACD",
+        StrategyKind::BollReversion => "布林回归",
+        StrategyKind::BollBreakout => "布林突破",
+        StrategyKind::KdjCross => "KDJ",
+        StrategyKind::CciReversal => "CCI反转",
+        StrategyKind::CciMidline => "CCI中线",
+        StrategyKind::PriceMaCross => "价格/MA",
+        StrategyKind::DonchianBreakout => "唐奇安突破",
+    }
+}
+
+fn params_desc(kind: backtest::catalog::StrategyKind, p: &StrategyParams) -> String {
+    use backtest::catalog::StrategyKind;
+    match kind {
+        StrategyKind::MaCross | StrategyKind::PriceMaCross => format!(
+            "fast/period={},slow={},ema={}",
+            if kind == StrategyKind::MaCross { p.fast } else { p.period },
+            if kind == StrategyKind::MaCross { p.slow } else { 0 },
+            p.use_ema,
+        ),
+        StrategyKind::RsiReversal => format!("p={},os={},ob={}", p.period, p.oversold, p.overbought),
+        StrategyKind::RsiMidline => format!("p={},bull={},bear={}", p.period, p.bull_level, p.bear_level),
+        StrategyKind::MacdCross => format!("{},{},{}", p.fast, p.slow, p.signal),
+        StrategyKind::RsiLongOnly => format!("p={},os={},ob={}", p.period, p.oversold, p.overbought),
+        StrategyKind::BollReversion | StrategyKind::BollBreakout => format!("p={},k={}", p.period, p.k),
+        StrategyKind::KdjCross | StrategyKind::CciMidline => format!("p={}", p.period),
+        StrategyKind::CciReversal => format!("p={},t={}", p.period, p.threshold),
+        StrategyKind::DonchianBreakout => format!("p={}", p.period),
+    }
+}
+
+/// 对所有内置策略做参数网格扫描，取最近 `days` 天（4h 周期）内收益率前 `top` 名的组合。
+pub async fn run_sweep(request: SweepQuery) -> Result<Value> {
+    let symbol = request.symbol.unwrap_or_else(|| "BTCUSDT".to_string());
+    let days = request.days.unwrap_or(120).max(1);
+    let top = request.top.unwrap_or(20).max(1);
+
+    let initial_capital = 100.0;
+    let leverage = 1.0;
+    let fee_rate = 0.0004;
+
+    let conn = storage::open(storage::DEFAULT_DB_PATH)?;
+    // storage 会把 1m 基础数据聚合成 4h；再取最近 days 天的 4h 根（每天 6 根）
+    let mut klines_4h = storage::klines(&conn, &symbol, "4h").with_context(|| {
+        format!("读取历史数据失败: {} 4h", symbol)
+    })?;
+
+    let bars_per_day = 6usize;
+    let take = days.saturating_mul(bars_per_day);
+    let window: Vec<_> = if klines_4h.len() > take {
+        klines_4h.split_off(klines_4h.len() - take)
+    } else {
+        klines_4h
+    };
+
+    if window.is_empty() {
+        return Err(anyhow!(
+            "数据库里没有 {} 的足够历史数据，请先运行 `cargo run -p collector -- backfill 120`",
+            symbol,
+        ));
+    }
+
+    let rows = run_sweep_lib(&window, initial_capital, leverage, fee_rate, top);
+
+    Ok(json!({
+        "symbol": symbol,
+        "interval": "4h",
+        "days": days,
+        "bars": window.len(),
+        "actualDays": (window.len() as f64 / bars_per_day as f64).round(),
+        "firstOpenTime": window.first().map(|k| k.open_time),
+        "lastCloseTime": window.last().map(|k| k.close_time),
+        "capital": initial_capital,
+        "leverage": leverage,
+        "feeRate": fee_rate,
+        "rows": rows,
+    }))
 }

@@ -5,7 +5,7 @@ use axum::Json;
 
 use crate::service;
 
-use super::types::{BacktestRequest, CustomBacktestRequest, KlineQuery};
+use super::types::{BacktestRequest, CompoundBacktestRequest, CustomBacktestRequest, KlineQuery, SweepQuery};
 
 /// 处理 /api/klines：解析参数 → 调业务层 → 返回 JSON
 pub async fn handle_klines(
@@ -108,5 +108,25 @@ pub async fn handle_backtest_custom(
     let body = service::run_custom_backtest(request)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("自定义回测失败: {e}")))?;
+    Ok(axum::Json(body))
+}
+
+/// 处理 GET /api/backtest/sweep：对全部策略做参数扫描，取收益前 N
+pub async fn handle_backtest_sweep(
+    Query(query): Query<SweepQuery>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let body = service::run_sweep(query)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("参数扫描失败: {e}")))?;
+    Ok(axum::Json(body))
+}
+
+/// 处理 POST /api/backtest/compound：用与 sweep 相同的复利引擎重新跑指定组合
+pub async fn handle_backtest_compound(
+    Json(request): Json<CompoundBacktestRequest>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let body = service::run_compound_backtest_request(request)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("复利回测失败: {e}")))?;
     Ok(axum::Json(body))
 }

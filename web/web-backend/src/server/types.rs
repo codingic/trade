@@ -41,3 +41,29 @@ pub struct CustomBacktestRequest {
     pub strategy_id: String,
     pub params: Option<HashMap<String, Value>>,
 }
+
+/// 参数扫描请求（query）：对全部策略做参数网格扫描，取收益前 N
+#[derive(Deserialize)]
+pub struct SweepQuery {
+    /// 合约，默认 BTCUSDT
+    pub symbol: Option<String>,
+    /// 扫描天数（4h 周期下的自然天），默认 120
+    pub days: Option<usize>,
+    /// 取收益率前 N 名，默认 20
+    pub top: Option<usize>,
+}
+
+/// 复利回测请求：用与 sweep 完全相同的复利引擎重新跑一次指定组合。
+#[derive(Deserialize)]
+pub struct CompoundBacktestRequest {
+    pub symbol: Option<String>,
+    pub interval: Option<String>,
+    /// 回测最近多少天（按 interval 每天根数换算），默认 120
+    pub days: Option<usize>,
+    pub lookback: Option<usize>,
+    pub kind: String,
+    pub capital: Option<f64>,
+    pub leverage: Option<f64>,
+    pub fee: Option<f64>,
+    pub params: Option<HashMap<String, Value>>,
+}

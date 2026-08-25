@@ -16,7 +16,9 @@ pub mod market;
 
 pub use backtest::list_strategies;
 pub use backtest::run_backtest_preview;
+pub use backtest::run_compound_backtest_request;
 pub use backtest::run_custom_backtest;
 pub use backtest::run_strategy_catalog;
+pub use backtest::run_sweep;
 pub use db::get_db_overview;
 pub use market::get_kline_chart;

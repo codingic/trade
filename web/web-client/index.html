@@ -325,6 +325,7 @@
       <button id="refresh" class="active">刷新</button>
       <button id="catalogView">策略目录</button>
       <button id="top10View" style="background:#1f6feb22; border-color:#1f6feb; color:#58a6ff;">🏆 Top10</button>
+      <button id="hy3top20" style="background:#1f6feb22; border-color:#58a6ff; color:#58a6ff;">🚀 hy3top20</button>
       <button id="backtestView">策略回测</button>
       <button id="dbView">数据库</button>
     </div>
@@ -369,6 +370,19 @@
         <button class="modal-close" id="top10Close">&times;</button>
       </div>
       <div class="modal-body" id="top10Body"></div>
+    </div>
+  </div>
+
+  <!-- hy3top20 参数扫描页面 -->
+  <div class="modal-mask" id="hy3top20Modal">
+    <div class="modal" style="width: min(1180px, 96vw); max-height: 88vh;">
+      <div class="modal-header">
+        <h2>🚀 hy3top20 · 4h · 120天策略扫描</h2>
+        <button class="modal-close" id="hy3Close">&times;</button>
+      </div>
+      <div class="modal-body" id="hy3top20Body">
+        <div class="bt-empty">扫描中，请稍候（正在对全部策略做参数网格遍历）...</div>
+      </div>
     </div>
   </div>
 
@@ -695,6 +709,8 @@
     const catalogBody = document.getElementById('catalogBody');
     const backtestModal = document.getElementById('backtestModal');
     const backtestBody = document.getElementById('backtestBody');
+    const hy3Modal = document.getElementById('hy3top20Modal');
+    const hy3Body = document.getElementById('hy3top20Body');
     const backtestCatalog = document.getElementById('backtestCatalog');
     const backtestForm = document.getElementById('backtestForm');
     const backtestRunButton = document.getElementById('btRun');
@@ -702,10 +718,12 @@
     document.getElementById('dbView').addEventListener('click', openDbModal);
     document.getElementById('catalogView').addEventListener('click', openCatalogModal);
     document.getElementById('top10View').addEventListener('click', openTop10Modal);
+    document.getElementById('hy3top20').addEventListener('click', openHy3Modal);
     document.getElementById('backtestView').addEventListener('click', openBacktestModal);
     document.getElementById('dbClose').addEventListener('click', closeDbModal);
     document.getElementById('catalogClose').addEventListener('click', closeCatalogModal);
     document.getElementById('top10Close').addEventListener('click', closeTop10Modal);
+    document.getElementById('hy3Close').addEventListener('click', closeHy3Modal);
     document.getElementById('backtestClose').addEventListener('click', closeBacktestModal);
     document.getElementById('btSync').addEventListener('click', syncBacktestFormWithChart);
     backtestRunButton.addEventListener('click', runBacktest);
@@ -718,12 +736,14 @@
     dbModal.addEventListener('click', e => { if (e.target === dbModal) closeDbModal(); });
     catalogModal.addEventListener('click', e => { if (e.target === catalogModal) closeCatalogModal(); });
     backtestModal.addEventListener('click', e => { if (e.target === backtestModal) closeBacktestModal(); });
+    hy3Modal.addEventListener('click', e => { if (e.target === hy3Modal) closeHy3Modal(); });
     // 按 Esc 关闭
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
         closeDbModal();
         closeCatalogModal();
         closeBacktestModal();
+        closeHy3Modal();
       }
     });
 
@@ -1250,6 +1270,133 @@
 
     function closeTop10Modal() {
       top10Modal.classList.remove('open');
+    }
+
+    function openHy3Modal() {
+      hy3Modal.classList.add('open');
+      loadHy3Top20();
+    }
+
+    function closeHy3Modal() {
+      hy3Modal.classList.remove('open');
+    }
+
+    async function loadHy3Top20() {
+      const symbol = document.getElementById('symbol').value;
+      const days = 120;
+      const top = 20;
+      hy3Body.innerHTML = '<div class="bt-empty">扫描中，请稍候（正在对全部策略做参数网格遍历）...</div>';
+      try {
+        const data = await fetchJson(`${API_BASE}/api/backtest/sweep?symbol=${encodeURIComponent(symbol)}&days=${days}&top=${top}`);
+        renderHy3Top20(data);
+      } catch (e) {
+        hy3Body.innerHTML = `<div class="bt-empty">扫描失败：${e.message}（请确认后端已启动且数据库有足够 ${symbol} 历史数据）</div>`;
+      }
+    }
+
+    function renderHy3Top20(data) {
+      const rows = data.rows || [];
+      const actualDays = data.actualDays != null ? data.actualDays : (data.bars / 6);
+      const fmtTime = (ts) => ts == null ? '—' : new Date(ts).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+      let html = `
+        <div class="top10-header-info">
+          <span>📊 数据周期: <b>${data.symbol} · 4h · 约${actualDays}天</b></span>
+          <span>💰 资金: <b>100U · 1x杠杆 · 复利全仓</b></span>
+          <span>💸 手续费: <b>0.04%</b></span>
+          <span>🔍 样本: <b>${data.bars} 根 4h</b>（${fmtTime(data.firstOpenTime)} → ${fmtTime(data.lastCloseTime)}）</span>
+        </div>
+        <div class="catalog-table-wrap">
+          <table class="catalog-table">
+            <thead>
+              <tr>
+                <th>排名</th><th>策略</th><th>分类</th><th>参数</th>
+                <th>收益率</th><th>胜率</th><th>笔数</th><th>最大回撤</th><th>净收益U</th><th>回测</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+
+      if (!rows.length) {
+        html += `<tr><td colspan="10" style="color:#8b949e;">没有命中任何有效组合（可能数据不足或参数组合均无法成交）。</td></tr>`;
+      }
+
+      for (const r of rows) {
+        const pnlClass = Number(r.returnPct) >= 0 ? 'catalog-positive' : 'catalog-negative';
+        html += `
+          <tr data-rank="${r.rank}">
+            <td>${r.rank}</td>
+            <td><div class="catalog-name">${r.name}</div><div class="catalog-desc">${r.category}</div></td>
+            <td>${r.category}</td>
+            <td style="font-family:monospace;">${r.paramsDesc}</td>
+            <td class="${pnlClass}">${fmtNumber(r.returnPct)}%</td>
+            <td>${fmtNumber(r.winRate)}%</td>
+            <td>${r.trades}</td>
+            <td>${fmtNumber(r.maxDd)}%</td>
+            <td>${fmtNumber(r.netProfit, 2)}</td>
+            <td><button class="top10-run" data-rank="${r.rank}">▶ 回测</button></td>
+          </tr>`;
+      }
+
+      html += '</tbody></table></div>';
+      html += `
+        <div style="margin-top:14px; padding:10px 14px; background:#161b22; border:1px solid #30363d; border-radius:8px; font-size:11px; color:#8b949e;">
+          ⚠️ 以上为对全部策略「参数网格」遍历后按收益率排序的前 20 名，基于历史数据回测（复利全仓），不构成投资建议。点击「回测」会用与扫描完全相同的复利引擎、相同的 120 天窗口重新运行该组合。
+        </div>`;
+
+      hy3Body.innerHTML = html;
+
+      hy3Body.querySelectorAll('.top10-run').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const rank = parseInt(btn.dataset.rank);
+          const r = rows.find(x => x.rank === rank);
+          if (!r) return;
+
+          closeHy3Modal();
+          catalogModal.classList.add('open');
+          catalogBody.innerHTML = `
+            <div style="display:flex; gap:16px; min-height:400px;">
+              <div style="flex:0 0 340px; background:#0d1117; border:1px solid #21262d; border-radius:8px; padding:14px;">
+                <div style="margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                  <button id="spBack2" style="background:#21262d; color:#c9d1d9; border:1px solid #30363d; border-radius:6px; padding:4px 10px; cursor:pointer; font-size:12px;">← 返回</button>
+                  <span style="color:#8b949e; font-size:12px;">hy3top20 · #${r.rank}</span>
+                </div>
+                <h3 style="color:#e6edf3; font-size:15px; margin:0 0 4px 0;">${r.name}</h3>
+                <div style="color:#8b949e; font-size:12px; margin-bottom:8px;">${r.paramsDesc}</div>
+                <div style="color:#3fb950; font-size:13px; font-weight:600; margin-bottom:8px;">4h 复利回测中...</div>
+              </div>
+              <div id="spResult" style="flex:1; overflow-y:auto; max-height:65vh;">
+                <div class="bt-empty">正在运行复利回测，请稍候...</div>
+              </div>
+            </div>
+          `;
+          document.getElementById('spBack2').addEventListener('click', () => {
+            closeCatalogModal();
+          });
+
+          try {
+            const data = await fetchJson(`${API_BASE}/api/backtest/compound`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                symbol: document.getElementById('symbol').value,
+                interval: '4h',
+                days: 120,
+                lookback: r.lookback,
+                kind: r.kind,
+                capital: 100,
+                leverage: 1,
+                fee: 0.0004,
+                params: r.params,
+              }),
+            });
+            renderCustomBacktestResult(data);
+          } catch (err) {
+            const rel = document.getElementById('spResult');
+            if (rel) rel.innerHTML = `<div class="bt-empty">复利回测失败：${err.message}</div>`;
+          }
+        });
+      });
     }
 
     function renderTop10() {
