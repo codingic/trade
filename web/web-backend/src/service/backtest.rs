@@ -511,16 +511,21 @@ pub async fn run_compound_backtest_request(request: CompoundBacktestRequest) -> 
         lookback
     };
 
-    let result = backtest::sweep::run_compound_backtest(
-        &klines,
-        effective_lookback,
-        kind,
-        &params,
-        initial_capital,
-        leverage,
-        fee_rate,
-        take_profit_pct,
-    );
+    let params_for_result = params.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        backtest::sweep::run_compound_backtest(
+            &klines,
+            effective_lookback,
+            kind,
+            &params,
+            initial_capital,
+            leverage,
+            fee_rate,
+            take_profit_pct,
+        )
+    })
+    .await
+    .map_err(|e| anyhow!("回测任务执行失败: {e}"))?;
 
     // 与 custom backtest 输出结构对齐，前端可用同一套 renderCustomBacktestResult
     let recent_trades: Vec<Value> = result
@@ -549,11 +554,11 @@ pub async fn run_compound_backtest_request(request: CompoundBacktestRequest) -> 
     Ok(json!({
         "strategy": {
             "id": request.kind,
-            "name": format!("{} ({})", request.kind, params_desc(kind, &params)),
+            "name": format!("{} ({})", request.kind, params_desc(kind, &params_for_result)),
             "category": kind_category(kind),
-            "description": params_desc(kind, &params),
+            "description": params_desc(kind, &params_for_result),
             "kind": request.kind,
-            "params": params,
+            "params": params_for_result,
         },
         "parameters": {
             "symbol": symbol,

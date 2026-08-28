@@ -8,3 +8,8 @@
 # Large data files
 tradedata/*.db
 tradedata/*.db-journal
+
+# 工具/临时目录
+.workbuddy/
+outputs/
+*.bak
